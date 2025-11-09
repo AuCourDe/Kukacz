@@ -29,9 +29,12 @@ def main():
     try:
         if ENABLE_SPEAKER_DIARIZATION and not SPEAKER_DIARIZATION_TOKEN:
             message = (
-                "Brak tokenu Hugging Face dla rozpoznawania mówców. "
-                "Dodaj wartość zmiennej SPEAKER_DIARIZATION_TOKEN do pliku .env "
-                "i uruchom ponownie aplikację."
+                "Brak tokenu Hugging Face dla rozpoznawania mówców.\n"
+                "1. Wejdź na https://huggingface.co/pyannote/speaker-diarization-3.1 "
+                "i zaakceptuj warunki dostępu.\n"
+                "2. Skopiuj swój token (zakładka Settings → Access Tokens).\n"
+                "3. Dodaj wartość zmiennej SPEAKER_DIARIZATION_TOKEN do pliku .env "
+                "(np. SPEAKER_DIARIZATION_TOKEN=\"hf_xxx\") i uruchom ponownie aplikację."
             )
             logger.error(message)
             print(message, file=sys.stderr)

@@ -97,20 +97,21 @@ brew install ffmpeg
 1. **Uruchomienie aplikacji**
    ```bash
    # Automatyczne uruchomienie (Ubuntu / WSL)
-   ./run_ubuntu.sh
+   ./run.sh
 
    # Ręczna aktywacja
    source .venv/bin/activate
    python main.py
    ```
 
-   Skrypt `run_ubuntu.sh` automatycznie tworzy/aktywuje środowisko `.venv`, instaluje zależności i uruchamia aplikację.
+   Skrypt `run.sh` automatycznie tworzy/aktywuje środowisko `.venv`, instaluje zależności i uruchamia aplikację.
 
 2. **Umieszczenie plików audio**
 - Umieść pliki MP3 w folderze `input/`
 - Aplikacja automatycznie wykryje i przetworzy nowe pliki
 - Wyniki transkrypcji zostaną zapisane w folderze `output/`
 - Modele Whisper pobierają się automatycznie do podfolderu `models/` w katalogu projektu
+- Token Hugging Face (`SPEAKER_DIARIZATION_TOKEN`) wpisz w pliku `.env` po zaakceptowaniu licencji na https://huggingface.co/pyannote/speaker-diarization-3.1
 
 ### Struktura folderów
 
@@ -126,7 +127,7 @@ Whisper/
 ├── .env             # Lokalna konfiguracja (nie trafia do repozytorium)
 ├── main.py
 ├── whisper_analyzer.py
-├── run_ubuntu.sh
+├── run.sh
 ├── requirements.txt
 ├── README.md
 ├── SPEAKER_DIARIZATION.md               # Dokumentacja rozpoznawania mówców
@@ -165,6 +166,7 @@ self.enable_speaker_diarization = True  # Włącz/wyłącz rozpoznawanie mówcó
 
 - Modele Whisper są buforowane w `models/` względnie do katalogu projektu (zmienna `MODEL_CACHE_DIR`).
 - Aplikacja automatycznie wykrywa dostępność GPU; przy braku akceleratora przechodzi na CPU i wymusza transkrypcję w trybie `fp16=False`.
+- Do rozpoznawania mówców wymagany jest token Hugging Face (`SPEAKER_DIARIZATION_TOKEN`) uzyskany po zaakceptowaniu warunków repozytorium https://huggingface.co/pyannote/speaker-diarization-3.1.
 
 ### Model Whisper
 

@@ -22,6 +22,7 @@ def test_main_requires_hf_token(monkeypatch, capsys):
 
     captured = capsys.readouterr()
     assert "SPEAKER_DIARIZATION_TOKEN" in captured.err
+    assert "https://huggingface.co/pyannote/speaker-diarization-3.1" in captured.err
 
 
 def test_main_allows_disabled_diarization(monkeypatch):

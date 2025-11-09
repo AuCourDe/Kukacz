@@ -87,7 +87,7 @@ def test_config_absolute_log_file(monkeypatch, tmp_path):
 
 
 def test_run_script_skip_modes(tmp_path):
-    script_path = PROJECT_ROOT / "run_ubuntu.sh"
+    script_path = PROJECT_ROOT / "run.sh"
     env = os.environ.copy()
     env.update(
         {
