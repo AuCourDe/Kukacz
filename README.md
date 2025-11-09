@@ -110,6 +110,7 @@ brew install ffmpeg
 - Umieść pliki MP3 w folderze `input/`
 - Aplikacja automatycznie wykryje i przetworzy nowe pliki
 - Wyniki transkrypcji zostaną zapisane w folderze `output/`
+- Modele Whisper pobierają się automatycznie do podfolderu `models/` w katalogu projektu
 
 ### Struktura folderów
 
@@ -120,6 +121,7 @@ Whisper/
 │   ├── rozmowa_01.txt                    # Standardowa transkrypcja
 │   ├── rozmowa_01_with_speakers.txt      # Transkrypcja z mówcami
 │   └── rozmowa_01_metadata.json          # Metadane JSON
+├── models/          # Lokalna pamięć podręczna modeli Whisper
 ├── .env.example     # Szablon zmiennych środowiskowych
 ├── .env             # Lokalna konfiguracja (nie trafia do repozytorium)
 ├── main.py
@@ -158,6 +160,11 @@ self.input_folder = "input"  # Folder wejściowy
 self.output_folder = "output"  # Folder wyjściowy
 self.enable_speaker_diarization = True  # Włącz/wyłącz rozpoznawanie mówców
 ```
+
+#### Ścieżki modeli i urządzenia
+
+- Modele Whisper są buforowane w `models/` względnie do katalogu projektu (zmienna `MODEL_CACHE_DIR`).
+- Aplikacja automatycznie wykrywa dostępność GPU; przy braku akceleratora przechodzi na CPU i wymusza transkrypcję w trybie `fp16=False`.
 
 ### Model Whisper
 

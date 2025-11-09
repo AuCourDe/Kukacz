@@ -23,6 +23,7 @@ def _reload_config(monkeypatch, env: Dict[str, str] | None = None):
         "OUTPUT_FOLDER",
         "LOG_LEVEL",
         "LOG_FILE",
+        "MODEL_CACHE_DIR",
     ]
 
     for key in keys_to_clear:
@@ -47,6 +48,8 @@ def test_config_defaults(monkeypatch):
     assert config.OUTPUT_FOLDER.name == "output"
     assert config.LOG_FILE.is_absolute()
     assert config.LOG_FILE.name == "whisper_analyzer.log"
+    assert config.MODEL_CACHE_DIR.is_absolute()
+    assert config.MODEL_CACHE_DIR.name == "models"
 
 
 def test_config_environment_overrides(monkeypatch):
@@ -60,6 +63,7 @@ def test_config_environment_overrides(monkeypatch):
         "INPUT_FOLDER": "custom_input",
         "OUTPUT_FOLDER": "custom_output",
         "LOG_FILE": "logs/custom.log",
+        "MODEL_CACHE_DIR": "custom_models",
     }
     config = _reload_config(monkeypatch, env)
 
@@ -72,6 +76,7 @@ def test_config_environment_overrides(monkeypatch):
     assert config.INPUT_FOLDER == config.BASE_DIR / "custom_input"
     assert config.OUTPUT_FOLDER == config.BASE_DIR / "custom_output"
     assert config.LOG_FILE == config.BASE_DIR / "logs/custom.log"
+    assert config.MODEL_CACHE_DIR == config.BASE_DIR / "custom_models"
 
 
 def test_config_absolute_log_file(monkeypatch, tmp_path):

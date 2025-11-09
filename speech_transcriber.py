@@ -16,8 +16,10 @@ import time
 import tempfile
 from pathlib import Path
 from typing import Optional, Dict, Any
+import torch
 import whisper
 from cryptography.fernet import Fernet
+from config import MODEL_CACHE_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +28,8 @@ class WhisperTranscriber:
     
     def __init__(self):
         self.model = None
+        self.device = "cpu"
+        self._fp16 = False
         self.encryption_key = Fernet.generate_key()
         self.cipher = Fernet(self.encryption_key)
         logger.info("WhisperTranscriber zainicjalizowany")
@@ -33,9 +37,7 @@ class WhisperTranscriber:
     def load_model(self, model_name: str = "large-v3") -> None:
         """Ładowanie modelu Whisper do pamięci"""
         try:
-            model_cache_dir = Path(
-                os.getenv("WHISPER_CACHE_DIR", Path.home() / ".cache" / "whisper")
-            )
+            model_cache_dir = MODEL_CACHE_DIR
             model_cache_dir.mkdir(parents=True, exist_ok=True)
             model_file = model_cache_dir / f"{model_name}.pt"
 
@@ -47,16 +49,24 @@ class WhisperTranscriber:
             else:
                 logger.info("Znaleziono model Whisper '%s' w %s", model_name, model_file)
 
-            logger.info("Ładowanie modelu Whisper: %s", model_name)
+            self.device = "cuda" if torch.cuda.is_available() else "cpu"
+            self._fp16 = self.device != "cpu"
+
+            logger.info("Ładowanie modelu Whisper: %s (urządzenie: %s)", model_name, self.device)
             self.model = whisper.load_model(
                 model_name,
                 download_root=str(model_cache_dir),
+                device=self.device,
             )
             logger.info(
                 "Model Whisper '%s' przygotowany w katalogu %s",
                 model_name,
                 model_cache_dir,
             )
+            if self.device == "cpu":
+                logger.info("Nie wykryto karty graficznej - używanie trybu CPU")
+            else:
+                logger.info("Wykryto GPU - wykorzystanie akceleracji CUDA")
         except Exception as e:
             logger.error(f"Błąd podczas ładowania modelu Whisper: {e}")
             raise
@@ -96,7 +106,8 @@ class WhisperTranscriber:
                     result = self.model.transcribe(
                         str(temp_path),
                         language="pl",  # Język polski
-                        task="transcribe"
+                        task="transcribe",
+                        fp16=self._fp16,
                     )
                     
                     # Usunięcie tymczasowego pliku

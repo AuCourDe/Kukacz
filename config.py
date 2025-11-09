@@ -153,6 +153,9 @@ REASONING_TAGS = [
 INPUT_FOLDER: Path = BASE_DIR / os.getenv("INPUT_FOLDER", "input")
 OUTPUT_FOLDER: Path = BASE_DIR / os.getenv("OUTPUT_FOLDER", "output")
 
+# Folder modeli Whisper
+MODEL_CACHE_DIR: Path = BASE_DIR / os.getenv("MODEL_CACHE_DIR", "models")
+
 # Włączanie/wyłączanie funkcjonalności
 ENABLE_SPEAKER_DIARIZATION: bool = os.getenv("ENABLE_SPEAKER_DIARIZATION", "true").lower() == "true"
 ENABLE_OLLAMA_ANALYSIS: bool = os.getenv("ENABLE_OLLAMA_ANALYSIS", "true").lower() == "true"
