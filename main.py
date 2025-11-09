@@ -27,6 +27,16 @@ logger = logging.getLogger(__name__)
 def main():
     """Główna funkcja aplikacji z pełną inicjalizacją i uruchomieniem systemu"""
     try:
+        if ENABLE_SPEAKER_DIARIZATION and not SPEAKER_DIARIZATION_TOKEN:
+            message = (
+                "Brak tokenu Hugging Face dla rozpoznawania mówców. "
+                "Dodaj wartość zmiennej SPEAKER_DIARIZATION_TOKEN do pliku .env "
+                "i uruchom ponownie aplikację."
+            )
+            logger.error(message)
+            print(message, file=sys.stderr)
+            sys.exit(1)
+
         logger.info("=== Uruchamianie aplikacji Whisper Analyzer ===")
         
         # Inicjalizacja procesora audio

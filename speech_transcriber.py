@@ -11,6 +11,7 @@ Zawiera funkcje do:
 """
 
 import logging
+import os
 import time
 import tempfile
 from pathlib import Path
@@ -32,9 +33,30 @@ class WhisperTranscriber:
     def load_model(self, model_name: str = "large-v3") -> None:
         """Ładowanie modelu Whisper do pamięci"""
         try:
-            logger.info(f"Ładowanie modelu Whisper: {model_name}")
-            self.model = whisper.load_model(model_name)
-            logger.info("Model Whisper załadowany pomyślnie")
+            model_cache_dir = Path(
+                os.getenv("WHISPER_CACHE_DIR", Path.home() / ".cache" / "whisper")
+            )
+            model_cache_dir.mkdir(parents=True, exist_ok=True)
+            model_file = model_cache_dir / f"{model_name}.pt"
+
+            if not model_file.exists():
+                logger.info(
+                    "Model Whisper '%s' nie został znaleziony w cache. Pobieranie...",
+                    model_name,
+                )
+            else:
+                logger.info("Znaleziono model Whisper '%s' w %s", model_name, model_file)
+
+            logger.info("Ładowanie modelu Whisper: %s", model_name)
+            self.model = whisper.load_model(
+                model_name,
+                download_root=str(model_cache_dir),
+            )
+            logger.info(
+                "Model Whisper '%s' przygotowany w katalogu %s",
+                model_name,
+                model_cache_dir,
+            )
         except Exception as e:
             logger.error(f"Błąd podczas ładowania modelu Whisper: {e}")
             raise
