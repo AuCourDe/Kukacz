@@ -12,12 +12,18 @@ Zawiera funkcje do:
 
 import logging
 from typing import Dict, Any
-from config import OLLAMA_MODEL, OLLAMA_BASE_URL, CONTENT_ANALYSIS_TYPE, OLLAMA_PROMPTS
-from reasoning_filter import ReasoningFilter
+
+from .config import (
+    OLLAMA_MODEL,
+    OLLAMA_BASE_URL,
+    CONTENT_ANALYSIS_TYPE,
+    OLLAMA_PROMPTS,
+)
+from .reasoning_filter import ReasoningFilter
 
 # Import OllamaAnalyzer
 try:
-    from ollama_analyzer import OllamaAnalyzer
+    from .ollama_analyzer import OllamaAnalyzer
     OLLAMA_AVAILABLE = True
 except ImportError:
     OLLAMA_AVAILABLE = False
@@ -68,10 +74,22 @@ class ContentAnalyzer:
             
             # Analiza treści rozmowy (z wyborem typu z konfiguracji)
             logger.info(f"Rozpoczęcie analizy treści przez Ollama (typ: {CONTENT_ANALYSIS_TYPE})...")
-            content_analysis = self.ollama_analyzer.analyze_content(text, CONTENT_ANALYSIS_TYPE)
+            content_analysis = self.ollama_analyzer.analyze_content(
+                text, CONTENT_ANALYSIS_TYPE
+            )
+            if not content_analysis.get("success"):
+                logger.warning(
+                    "Analiza treści nie powiodła się: %s",
+                    content_analysis.get("validation_error") or content_analysis.get("error"),
+                )
             # Filtrowanie rozumowania z odpowiedzi
             content_analysis = self.reasoning_filter.process_ollama_response(content_analysis)
             analysis_results["content_analysis"] = content_analysis
+            if content_analysis.get("injection_detected"):
+                logger.warning(
+                    "Wynik analizy oznaczony jako potencjalna próba prompt injection: %s",
+                    content_analysis.get("injection_matches"),
+                )
             
             # Analiza wzorców mówców
             if speakers_data:

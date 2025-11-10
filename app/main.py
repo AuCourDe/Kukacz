@@ -1,16 +1,23 @@
 #!/usr/bin/env python3
 """
+Wejściowy moduł aplikacji.
 """
 
-import sys
 import logging
+import os
+import sys
 import time
-from config import (
-    WHISPER_MODEL, SPEAKER_DIARIZATION_TOKEN, OLLAMA_MODEL,
-    LOG_LEVEL, LOG_FILE, ENABLE_SPEAKER_DIARIZATION, ENABLE_OLLAMA_ANALYSIS
-)
 
-from audio_processor import AudioProcessor
+from .config import (
+    WHISPER_MODEL,
+    SPEAKER_DIARIZATION_TOKEN,
+    OLLAMA_MODEL,
+    LOG_LEVEL,
+    LOG_FILE,
+    ENABLE_SPEAKER_DIARIZATION,
+    ENABLE_OLLAMA_ANALYSIS,
+)
+from .audio_processor import AudioProcessor
 
 # Konfiguracja logowania
 LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -58,6 +65,11 @@ def main():
         # Przetwarzanie istniejących plików
         logger.info("Przetwarzanie istniejących plików...")
         processor.process_all_files()
+
+        run_once = os.getenv("APP_RUN_ONCE", "false").lower() == "true"
+        if run_once:
+            logger.info("Tryb jednorazowy aktywny (APP_RUN_ONCE=1) – kończę po pierwszym przebiegu.")
+            return
         
         # Uruchomienie obserwatora folderu
         logger.info("Uruchamianie obserwatora folderu...")

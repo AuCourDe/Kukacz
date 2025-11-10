@@ -19,7 +19,8 @@ from typing import Optional, Dict, Any
 import torch
 import whisper
 from cryptography.fernet import Fernet
-from config import MODEL_CACHE_DIR
+
+from .config import MODEL_CACHE_DIR
 
 logger = logging.getLogger(__name__)
 

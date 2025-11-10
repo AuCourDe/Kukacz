@@ -44,5 +44,5 @@ if [[ "${SKIP_APP_EXECUTION}" == "1" ]]; then
 fi
 
 echo "Starting Whisper Analyzer..."
-python "${PROJECT_ROOT}/main.py"
+python -m app.main
 

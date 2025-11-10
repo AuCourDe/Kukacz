@@ -1,0 +1,53 @@
+Test report – 2025-11-10
+=========================
+
+Środowisko:
+- OS: Ubuntu (WSL) – Python 3.12.3
+- Wirtualne środowisko: `venv_python310_new`
+- Konfiguracja Ollama:
+  - testy jednostkowe/E2E: zapytania HTTP zamockowane
+  - test integracyjny: rzeczywisty serwer `ollama serve`, model `gemma3:12b`
+
+Zakres testów:
+1. `pytest tests/test_security_prompt.py`
+   - 4 testy jednostkowe zabezpieczeń prompt injection
+   - Weryfikacja wykrywania fraz typu „ignore previous instructions” oraz „z transkrypcji…”
+   - Walidacja obsługi odpowiedzi niezgodnych z JSON
+   - Wynik: **4/4 PASS**
+
+2. `pytest tests/test_e2e_prompt_injection.py`
+   - Test E2E pipeline’u `AudioProcessor` z wstrzykniętą komendą „z transkrypcji…”
+   - Sprawdzenie wygenerowanego ostrzeżenia oraz flagi `integrity_alert`
+   - Wynik: **1/1 PASS**
+
+3. `pytest tests/test_ollama_integration_real.py`
+   - Integracyjny test z realnym modelem `gemma3:12b`
+   - Sprawdzenie flag `integrity_alert` dla transkrypcji z komendą „z transkrypcji…”
+   - Wynik: **1/1 PASS** (czas ok. 16 s)
+
+4. `pytest`
+   - Pełny zestaw testów (13 przypadków, w tym powyższe; integracyjny test uruchomiony gdy model dostępny)
+   - Wynik: **13/13 PASS**
+   - Ostrzeżenia: deprecations z bibliotek `matplotlib`, `torchaudio`, `speechbrain` (brak wpływu na wynik)
+
+5. Ręczny test end-to-end (`python -m app.main`)
+   - Parametry: `APP_RUN_ONCE=1`, `WHISPER_MODEL=large-v3`, `OLLAMA_MODEL=gemma3:12b`, `MAX_CONCURRENT_PROCESSES=1`, heurystyczny podział mówców (brak tokenu HF)
+   - Wejście: `input/test_production_run.mp3`
+   - Wyniki: `output/test_production_run 20251110094905.txt` (podział na SPEAKER_00..03) oraz `output/test_production_run ANALIZA 20251110094905.txt` (`integrity_alert: true`)
+   - Plik przeniesiony do `processed/`, logi w `whisper_analyzer.log`
+
+6. Test CPU-only
+   - Parametry: `CUDA_VISIBLE_DEVICES=''`, `WHISPER_MODEL=base`, `ENABLE_SPEAKER_DIARIZATION=false`, `OLLAMA_MODEL=gemma3:12b`, `MAX_CONCURRENT_PROCESSES=1`
+   - Wejście: `input/cpu_only.mp3`
+   - Wyniki: `output/cpu_only 20251110222203.txt` + analiza (`integrity_alert: false`), plik przeniesiony do `processed/cpu_only.mp3`
+
+Najważniejsze obserwacje:
+- Wszystkie scenariusze prompt injection oznaczane flagą `integrity_alert` i dodatkowym ostrzeżeniem (również przy realnym modelu).
+- Brak regresji w istniejących testach (`test_config.py`, `test_main.py`, `test_speech_transcriber.py`).
+- Wyniki zapisów analiz zawierają komunikat ostrzegawczy oraz identyfikację frazy „z transkrypcji”.
+- Przy pracy na GPU zalecane `MAX_CONCURRENT_PROCESSES=1` – brak konfliktów w transkrypcji i stabilna analiza.
+
+Wnioski:
+- Mechanizmy filtrowania i walidacji działają zgodnie z planem.
+- Można kontynuować procedurę publikacji (push/PR) po zatwierdzeniu zmian. 
+

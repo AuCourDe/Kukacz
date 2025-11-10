@@ -10,10 +10,10 @@ def reload_transcriber(monkeypatch, env=None):
             monkeypatch.delenv(key, raising=False)
         else:
             monkeypatch.setenv(key, value)
-    for module in ("speech_transcriber", "config"):
+    for module in ("app.speech_transcriber", "app.config"):
         if module in sys.modules:
             del sys.modules[module]
-    return importlib.import_module("speech_transcriber")
+    return importlib.import_module("app.speech_transcriber")
 
 
 def test_load_model_uses_project_models_dir(monkeypatch, tmp_path):

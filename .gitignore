@@ -8,6 +8,9 @@ __pycache__/
 venv*/
 input/
 output/
+processed/
+models/
+tmp_test/
 whisper_analyzer.log
 *.log
 tmp/

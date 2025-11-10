@@ -11,19 +11,24 @@ Zawiera główną klasę AudioProcessor która:
 """
 
 import logging
+import shutil
 import threading
 from pathlib import Path
 from typing import Optional, Union
-from config import (
-    INPUT_FOLDER, OUTPUT_FOLDER, ENABLE_SPEAKER_DIARIZATION, 
-    ENABLE_OLLAMA_ANALYSIS, MAX_CONCURRENT_PROCESSES
-)
 
-from file_loader import AudioFileLoader, FileWatcherManager
-from speech_transcriber import WhisperTranscriber
-from speaker_diarizer import SpeakerDiarizer, SimpleSpeakerDiarizer
-from content_analyzer import ContentAnalyzer
-from result_saver import ResultSaver
+from .config import (
+    INPUT_FOLDER,
+    OUTPUT_FOLDER,
+    PROCESSED_FOLDER,
+    ENABLE_SPEAKER_DIARIZATION,
+    ENABLE_OLLAMA_ANALYSIS,
+    MAX_CONCURRENT_PROCESSES,
+)
+from .file_loader import AudioFileLoader, FileWatcherManager
+from .speech_transcriber import WhisperTranscriber
+from .speaker_diarizer import SpeakerDiarizer, SimpleSpeakerDiarizer
+from .content_analyzer import ContentAnalyzer
+from .result_saver import ResultSaver
 
 logger = logging.getLogger(__name__)
 
@@ -44,10 +49,13 @@ class AudioProcessor:
         self.content_analyzer = ContentAnalyzer()
         self.result_saver = ResultSaver(output_folder_path)
         self.file_watcher = FileWatcherManager(self, input_folder_path)
+        self.processed_folder = Path(PROCESSED_FOLDER)
+        self.processed_folder.mkdir(parents=True, exist_ok=True)
         
         # Konfiguracja funkcjonalności
         self.enable_speaker_diarization = enable_speaker_diarization
         self.enable_ollama_analysis = enable_ollama_analysis
+        self.use_simple_diarization = False
         
         # Kontrola równoległości
         self.max_concurrent = MAX_CONCURRENT_PROCESSES
@@ -62,7 +70,7 @@ class AudioProcessor:
                             ollama_model: str = None) -> None:
         """Inicjalizacja wszystkich komponentów systemu"""
         try:
-            from config import WHISPER_MODEL, OLLAMA_MODEL
+            from .config import WHISPER_MODEL, OLLAMA_MODEL
             
             # Ładowanie modelu Whisper
             model_to_load = whisper_model if whisper_model else WHISPER_MODEL
@@ -70,10 +78,14 @@ class AudioProcessor:
             
             # Inicjalizacja rozpoznawania mówców
             if self.enable_speaker_diarization:
+                self.use_simple_diarization = False
                 success = self.speaker_diarizer.initialize(speaker_auth_token)
                 if not success:
-                    logger.warning("Rozpoznawanie mówców będzie wyłączone")
-                    self.enable_speaker_diarization = False
+                    logger.warning(
+                        "Zaawansowane rozpoznawanie mówców niedostępne – "
+                        "używam heurystycznego podziału na mówców."
+                    )
+                    self.use_simple_diarization = True
             
             # Inicjalizacja analizy Ollama
             if self.enable_ollama_analysis:
@@ -100,15 +112,15 @@ class AudioProcessor:
             
             # Rozpoznawanie mówców (jeśli włączone)
             speakers_data = None
+            segments = transcription_data.get("segments", [])
             if self.enable_speaker_diarization:
-                speakers_data = self.speaker_diarizer.diarize_speakers(audio_file_path)
+                if not self.use_simple_diarization:
+                    speakers_data = self.speaker_diarizer.diarize_speakers(audio_file_path)
                 
                 # Jeśli zaawansowane rozpoznawanie nie działa, użyj prostego algorytmu
                 if not speakers_data:
                     logger.info("Używanie prostego rozpoznawania mówców...")
-                    speakers_data = SimpleSpeakerDiarizer.diarize_speakers(
-                        transcription_data.get("segments", [])
-                    )
+                    speakers_data = SimpleSpeakerDiarizer.diarize_speakers(segments)
             
             # Dodanie danych o mówcach do wyników transkrypcji
             transcription_data["speakers"] = speakers_data
@@ -145,7 +157,15 @@ class AudioProcessor:
                     self.result_saver.save_transcription_with_speakers(
                         audio_file_path, transcription_data, analysis_results
                     )
-                    logger.info(f"Przetwarzanie zakończone pomyślnie: {audio_file_path.name}")
+                    # Przeniesienie przetworzonego pliku do folderu processed
+                    destination = self.processed_folder / audio_file_path.name
+                    destination.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.move(str(audio_file_path), destination)
+                    logger.info(
+                        "Przetwarzanie zakończone pomyślnie: %s (przeniesiono do %s)",
+                        audio_file_path.name,
+                        destination,
+                    )
                 else:
                     logger.error(f"Nie udało się przetworzyć pliku: {audio_file_path.name}")
                 

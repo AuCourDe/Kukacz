@@ -9,7 +9,7 @@ Kompleksowy system do transkrypcji i analizy treści plików audio zgodnie z PRD
 - ✅ **Rozpoznawanie mówców (Speaker Diarization)** - nowość!
 - ✅ Obsługa języka polskiego z dokładnością do 98%
 - ✅ Automatyczne monitorowanie folderu wejściowego
-- ✅ Równoległe przetwarzanie (max 4 pliki jednocześnie)
+- ✅ Przetwarzanie sekwencyjne (domyślnie 1 plik naraz; możliwość skalowania przez zmienną `MAX_CONCURRENT_PROCESSES`)
 - ✅ Szyfrowanie plików tymczasowych (AES-256)
 - ✅ Obsługa błędów z automatycznymi ponownymi próbami
 - ✅ Logowanie wszystkich operacji
@@ -101,7 +101,7 @@ brew install ffmpeg
 
    # Ręczna aktywacja
    source .venv/bin/activate
-   python main.py
+   python -m app.main
    ```
 
    Skrypt `run.sh` automatycznie tworzy/aktywuje środowisko `.venv`, instaluje zależności i uruchamia aplikację.
@@ -117,16 +117,18 @@ brew install ffmpeg
 
 ```
 Whisper/
+├── app/             # Kod aplikacji (moduły Python)
+│   ├── main.py
+│   ├── audio_processor.py
+│   └── ...
 ├── input/           # Folder z plikami MP3 do przetworzenia
 ├── output/          # Folder z wynikami transkrypcji
-│   ├── rozmowa_01.txt                    # Standardowa transkrypcja
-│   ├── rozmowa_01_with_speakers.txt      # Transkrypcja z mówcami
-│   └── rozmowa_01_metadata.json          # Metadane JSON
+├── processed/       # Przetworzone pliki audio
 ├── models/          # Lokalna pamięć podręczna modeli Whisper
+├── prompt/
+│   └── prompt.txt   # Prompt systemowy dla Ollama
 ├── .env.example     # Szablon zmiennych środowiskowych
 ├── .env             # Lokalna konfiguracja (nie trafia do repozytorium)
-├── main.py
-├── whisper_analyzer.py
 ├── run.sh
 ├── requirements.txt
 ├── README.md
@@ -138,7 +140,7 @@ Whisper/
 
 ```bash
 # 1. Uruchom aplikację
-python whisper_analyzer.py
+python -m app.main
 
 # 2. W nowym terminalu skopiuj plik audio
 cp /ścieżka/do/rozmowy.mp3 input/
@@ -156,7 +158,7 @@ Możesz dostosować parametry w kodzie:
 
 ```python
 # W klasie AudioProcessor
-self.max_concurrent = 4  # Maksymalna liczba równoczesnych przetwarzań
+self.max_concurrent = 1  # Domyślnie sekwencyjnie; zwiększ przez MAX_CONCURRENT_PROCESSES
 self.input_folder = "input"  # Folder wejściowy
 self.output_folder = "output"  # Folder wyjściowy
 self.enable_speaker_diarization = True  # Włącz/wyłącz rozpoznawanie mówców
@@ -178,15 +180,20 @@ Domyślnie używany jest model `large-v3` dla najwyższej dokładności. Możesz
 - `medium` - wolniejszy, wyższa dokładność
 - `large-v3` - najwolniejszy, najwyższa dokładność
 
-### Rozpoznawanie mówców
+### Rozpoznawanie mówców (PyAnnote)
 
-Aby włączyć rozpoznawanie mówców z tokenem HuggingFace:
-
-```python
-# W funkcji main()
-auth_token = "hf_your_token_here"
-processor.initialize_speaker_diarization(auth_token)
-```
+- Domyślnie aplikacja próbuje użyć modelu `pyannote/speaker-diarization-3.1`.
+- Aby korzystać z pełnej diarizacji:
+  1. Zaloguj się na HuggingFace i zaakceptuj regulaminy:
+     - https://huggingface.co/pyannote/speaker-diarization-3.1  
+     - https://huggingface.co/pyannote/segmentation-3.0
+  2. Wygeneruj token (Settings → Access Tokens) z uprawnieniami `read`.
+  3. Dodaj go do `.env`:
+     ```env
+     SPEAKER_DIARIZATION_TOKEN=hf_xxx
+     ```
+  4. Uruchom ponownie aplikację.
+- Brak tokenu ⇒ aplikacja przełącza się na heurystyczny algorytm (`SimpleSpeakerDiarizer`) i nadal oznacza wypowiedzi rozmówców, choć mniej dokładnie.
 
 ## Monitorowanie
 

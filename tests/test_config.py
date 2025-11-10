@@ -24,6 +24,9 @@ def _reload_config(monkeypatch, env: Dict[str, str] | None = None):
         "LOG_LEVEL",
         "LOG_FILE",
         "MODEL_CACHE_DIR",
+        "PROCESSED_FOLDER",
+        "PROMPT_DIR",
+        "PROMPT_FILE",
     ]
 
     for key in keys_to_clear:
@@ -32,10 +35,11 @@ def _reload_config(monkeypatch, env: Dict[str, str] | None = None):
     for key, value in env.items():
         monkeypatch.setenv(key, value)
 
-    if "config" in sys.modules:
-        del sys.modules["config"]
+    for module in ("app.config",):
+        if module in sys.modules:
+            del sys.modules[module]
 
-    return importlib.import_module("config")
+    return importlib.import_module("app.config")
 
 
 def test_config_defaults(monkeypatch):
@@ -50,6 +54,10 @@ def test_config_defaults(monkeypatch):
     assert config.LOG_FILE.name == "whisper_analyzer.log"
     assert config.MODEL_CACHE_DIR.is_absolute()
     assert config.MODEL_CACHE_DIR.name == "models"
+    assert config.PROCESSED_FOLDER.is_absolute()
+    assert config.PROCESSED_FOLDER.name == "processed"
+    assert config.PROMPT_FILE.is_absolute()
+    assert config.PROMPT_FILE.name == "prompt.txt"
 
 
 def test_config_environment_overrides(monkeypatch):
@@ -64,6 +72,7 @@ def test_config_environment_overrides(monkeypatch):
         "OUTPUT_FOLDER": "custom_output",
         "LOG_FILE": "logs/custom.log",
         "MODEL_CACHE_DIR": "custom_models",
+        "PROCESSED_FOLDER": "done",
     }
     config = _reload_config(monkeypatch, env)
 
@@ -77,6 +86,7 @@ def test_config_environment_overrides(monkeypatch):
     assert config.OUTPUT_FOLDER == config.BASE_DIR / "custom_output"
     assert config.LOG_FILE == config.BASE_DIR / "logs/custom.log"
     assert config.MODEL_CACHE_DIR == config.BASE_DIR / "custom_models"
+    assert config.PROCESSED_FOLDER == config.BASE_DIR / "done"
 
 
 def test_config_absolute_log_file(monkeypatch, tmp_path):

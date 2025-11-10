@@ -5,10 +5,10 @@ import pytest
 
 
 def reload_main():
-    for module in ("main", "config"):
+    for module in ("app.main", "app.config"):
         if module in sys.modules:
             del sys.modules[module]
-    return importlib.import_module("main")
+    return importlib.import_module("app.main")
 
 
 def test_main_requires_hf_token(monkeypatch, capsys):
@@ -52,16 +52,16 @@ def test_main_allows_disabled_diarization(monkeypatch):
         def stop_file_watcher(self):
             self.watcher_stopped = True
 
-    for module in ("main", "config", "audio_processor"):
+    for module in ("app.main", "app.config", "app.audio_processor"):
         if module in sys.modules:
             del sys.modules[module]
 
-    import audio_processor  # noqa: E402
+    import app.audio_processor as audio_processor  # noqa: E402
 
     dummy = DummyProcessor()
     monkeypatch.setattr(audio_processor, "AudioProcessor", lambda *a, **k: dummy)
 
-    main_module = importlib.import_module("main")
+    main_module = importlib.import_module("app.main")
 
     def fake_sleep(_):
         raise KeyboardInterrupt

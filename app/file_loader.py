@@ -62,8 +62,8 @@ class AudioFileLoader:
         unprocessed = []
         
         for audio_file in audio_files:
-            output_file = output_folder / f"{audio_file.stem}.txt"
-            if not output_file.exists():
+            transcript_pattern = f"{audio_file.stem} *.txt"
+            if not any(output_folder.glob(transcript_pattern)):
                 unprocessed.append(audio_file)
         
         logger.info(f"Znaleziono {len(unprocessed)} nieprzetworzonych plików")

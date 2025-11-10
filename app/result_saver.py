@@ -11,10 +11,13 @@ Zawiera funkcje do:
 - Obsługi różnych formatów wyjściowych
 """
 
+import json
 import logging
+from datetime import datetime
 from pathlib import Path
 from typing import Dict, Optional, List, Union
-from reasoning_filter import ReasoningFilter
+
+from .reasoning_filter import ReasoningFilter
 
 logger = logging.getLogger(__name__)
 
@@ -123,14 +126,13 @@ class ResultSaver:
                                        analysis_results: Optional[Dict] = None) -> Path:
         """Zapisywanie transkrypcji z informacjami o mówcach i analizą Ollama"""
         try:
-            # Utworzenie nazwy pliku wyjściowego - taka sama jak oryginalny plik MP3
-            output_filename = audio_file_path.stem + ".txt"
+            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+            output_filename = f"{audio_file_path.stem} {timestamp}.txt"
             output_path = self.output_folder / output_filename
-            
-            # Utworzenie nazwy pliku z analizą Ollama
-            ollama_filename = audio_file_path.stem + "_ollama.txt"
-            ollama_path = self.output_folder / ollama_filename
-            
+
+            analysis_filename = f"{audio_file_path.stem} ANALIZA {timestamp}.txt"
+            analysis_path = self.output_folder / analysis_filename
+
             # Zapisanie transkrypcji tekstowej z rozpoznawaniem mówców
             with open(output_path, 'w', encoding='utf-8') as f:
                 f.write(f"Transkrypcja rozmowy: {audio_file_path.name}\n")
@@ -191,28 +193,25 @@ class ResultSaver:
                     f.write(f"  - Średnio słów/segment: {avg_words_per_segment:.1f}\n")
                     f.write("\n")
             
-            # Zapisanie analizy Ollama
-            if analysis_results and analysis_results.get("content_analysis", {}).get("success"):
-                content_analysis = analysis_results["content_analysis"]
-                ollama_response = content_analysis["raw_response"]
-                
-                with open(ollama_path, 'w', encoding='utf-8') as f:
-                    f.write(f"Analiza rozmowy: {audio_file_path.name}\n")
-                    f.write("=" * 60 + "\n\n")
-                    f.write(ollama_response)
-                
-                # Zapisywanie rozumowania do osobnego pliku (jeśli włączone)
-                if content_analysis.get("filtered_reasoning"):
-                    self.reasoning_filter.save_reasoning_to_file(
-                        content_analysis["filtered_reasoning"],
-                        self.output_folder,
-                        audio_file_path.stem
-                    )
-                
-                logger.info(f"Analiza Ollama zapisana: {ollama_path}")
-            else:
-                logger.warning("Brak analizy Ollama do zapisania")
-            
+            analysis_text = self._prepare_analysis_text(analysis_results, audio_file_path)
+            with open(analysis_path, "w", encoding="utf-8") as f:
+                f.write(f"Analiza rozmowy: {audio_file_path.name}\n")
+                f.write("=" * 60 + "\n\n")
+                f.write(analysis_text)
+
+            # Zapisywanie rozumowania do osobnego pliku (jeśli włączone)
+            if (
+                analysis_results
+                and analysis_results.get("content_analysis", {}).get("filtered_reasoning")
+            ):
+                self.reasoning_filter.save_reasoning_to_file(
+                    analysis_results["content_analysis"]["filtered_reasoning"],
+                    self.output_folder,
+                    audio_file_path.stem,
+                )
+
+            logger.info("Analiza zapisana: %s", analysis_path)
+
             logger.info(f"Transkrypcja zapisana: {output_path}")
             return output_path
             
@@ -222,5 +221,50 @@ class ResultSaver:
     
     def is_file_processed(self, audio_file_path: Path) -> bool:
         """Sprawdzenie czy plik audio został już przetworzony"""
-        output_file = self.output_folder / f"{audio_file_path.stem}.txt"
-        return output_file.exists() 
+        pattern = f"{audio_file_path.stem} *.txt"
+        for candidate in self.output_folder.glob(pattern):
+            if "ANALIZA" not in candidate.stem:
+                return True
+        return False
+
+    def _prepare_analysis_text(
+        self, analysis_results: Optional[Dict], audio_file_path: Path
+    ) -> str:
+        """Tworzy tekst analizy nawet jeśli Ollama jest niedostępna."""
+        if not analysis_results:
+            return (
+                "Analiza Ollama niedostępna. "
+                "Sprawdź konfigurację serwera lub ustaw zmienną ENABLE_OLLAMA_ANALYSIS=false."
+            )
+
+        content_analysis = analysis_results.get("content_analysis")
+        if content_analysis:
+            if content_analysis.get("injection_detected"):
+                warning = (
+                    "⚠️ Wykryto potencjalną próbę manipulacji transkrypcją. "
+                    f"Słowa-klucze: {', '.join(content_analysis.get('injection_matches', []))}\n\n"
+                )
+            else:
+                warning = ""
+
+            if not content_analysis.get("success"):
+                error_detail = (
+                    content_analysis.get("validation_error")
+                    or content_analysis.get("error")
+                    or "Nieznany błąd analizy"
+                )
+                return warning + f"Analiza Ollama zakończona błędem: {error_detail}"
+
+            if content_analysis.get("raw_response"):
+                return warning + content_analysis["raw_response"]
+
+        if content_analysis and content_analysis.get("parsed_result"):
+            try:
+                return json.dumps(content_analysis["parsed_result"], ensure_ascii=False, indent=2)
+            except Exception:
+                return str(content_analysis["parsed_result"])
+
+        return (
+            f"Analiza Ollama niedostępna dla pliku {audio_file_path.name}. "
+            f"Szczegóły: {analysis_results}"
+        )

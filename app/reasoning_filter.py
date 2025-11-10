@@ -14,7 +14,7 @@ import re
 import logging
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional, Union
-from config import SAVE_REASONING, REASONING_TAGS
+from .config import SAVE_REASONING, REASONING_TAGS
 
 logger = logging.getLogger(__name__)
 
