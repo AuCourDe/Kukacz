@@ -39,7 +39,7 @@ if load_dotenv:
 SPEAKER_DIARIZATION_TOKEN: str = os.getenv("SPEAKER_DIARIZATION_TOKEN", "")
 
 # Model Whisper do transkrypcji
-WHISPER_MODEL: str = os.getenv("WHISPER_MODEL", "large-v3")
+WHISPER_MODEL: str = os.getenv("WHISPER_MODEL", "base")
 
 # Model Ollama do analizy treści
 OLLAMA_MODEL: str = os.getenv("OLLAMA_MODEL", "qwen3:8b")
@@ -211,6 +211,13 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
+def _env_bool(name: str, default: bool) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
 OLLAMA_TEMPERATURE: float = _env_float("OLLAMA_TEMPERATURE", 0.7)
 OLLAMA_TOP_P: float = _env_float("OLLAMA_TOP_P", 0.9)
 OLLAMA_TOP_K: int = _env_int("OLLAMA_TOP_K", 40)
@@ -225,6 +232,13 @@ OLLAMA_GENERATION_PARAMS = {
     "max_tokens": OLLAMA_MAX_TOKENS,
     "stop": None
 }
+
+OLLAMA_CONNECT_TIMEOUT: float = _env_float("OLLAMA_CONNECT_TIMEOUT", 10.0)
+OLLAMA_REQUEST_TIMEOUT: float = _env_float("OLLAMA_REQUEST_TIMEOUT", 60.0)
+OLLAMA_DEBUG_LOGGING: bool = _env_bool("OLLAMA_DEBUG_LOGGING", False)
+OLLAMA_STREAM_RESPONSES: bool = _env_bool("OLLAMA_STREAM_RESPONSES", False)
+OLLAMA_PROMPT_LOG_MAX_CHARS: int = max(0, _env_int("OLLAMA_PROMPT_LOG_MAX_CHARS", 2000))
+OLLAMA_STREAM_LOG_CHUNK_LIMIT: int = max(0, _env_int("OLLAMA_STREAM_LOG_CHUNK_LIMIT", 200))
 
 # ============================================================================
 # USTAWIENIA FILTROWANIA ROZUMOWANIA

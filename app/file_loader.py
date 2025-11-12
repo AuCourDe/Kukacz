@@ -57,17 +57,16 @@ class AudioFileLoader:
         return valid_files
     
     def get_unprocessed_files(self, output_folder: Path) -> List[Path]:
-        """Pobranie plików MP3 które nie zostały jeszcze przetworzone"""
+        """
+        Pobranie plików MP3 do przetworzenia.
+
+        W aktualnym podejściu zawsze zwracamy wszystkie pliki znajdujące się w folderze
+        wejściowym – nawet jeśli wcześniej istniały już wyniki dla tej samej nazwy.
+        Dzięki temu użytkownik może świadomie ponownie przetworzyć plik.
+        """
         audio_files = self.get_audio_files()
-        unprocessed = []
-        
-        for audio_file in audio_files:
-            transcript_pattern = f"{audio_file.stem} *.txt"
-            if not any(output_folder.glob(transcript_pattern)):
-                unprocessed.append(audio_file)
-        
-        logger.info(f"Znaleziono {len(unprocessed)} nieprzetworzonych plików")
-        return unprocessed
+        logger.info(f"Znaleziono {len(audio_files)} plików MP3 do przetworzenia")
+        return audio_files
 
 class FileWatcher(FileSystemEventHandler):
     """Obserwator folderu do automatycznego przetwarzania nowych plików"""

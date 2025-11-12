@@ -6,6 +6,8 @@ Moduł do integracji z Ollama dla analizy treści
 import json
 import logging
 import re
+import time
+import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -20,9 +22,106 @@ class OllamaAnalyzer:
         self.base_url = base_url
         self.model = model
         self.api_url = f"{base_url}/api/generate"
+
+        from .config import (
+            OLLAMA_CONNECT_TIMEOUT,
+            OLLAMA_REQUEST_TIMEOUT,
+            OLLAMA_DEBUG_LOGGING,
+            OLLAMA_STREAM_RESPONSES,
+            OLLAMA_PROMPT_LOG_MAX_CHARS,
+            OLLAMA_STREAM_LOG_CHUNK_LIMIT,
+        )
+
+        self.connect_timeout = OLLAMA_CONNECT_TIMEOUT
+        self.request_timeout = OLLAMA_REQUEST_TIMEOUT
+        self.debug_logging = OLLAMA_DEBUG_LOGGING
+        self.stream_responses = OLLAMA_STREAM_RESPONSES
+        self.prompt_log_max_chars = OLLAMA_PROMPT_LOG_MAX_CHARS
+        self.stream_log_chunk_limit = OLLAMA_STREAM_LOG_CHUNK_LIMIT
+        self.payload_preview_max_lines = 40
         
         logger.info(f"OllamaAnalyzer zainicjalizowany z modelem: {model}")
         logger.info(f"API URL: {self.api_url}")
+
+    @staticmethod
+    def _truncate_for_log(text: str, limit: int) -> str:
+        if not text:
+            return ""
+        if limit <= 0 or len(text) <= limit:
+            return text
+        truncated = text[:limit]
+        hidden = len(text) - limit
+        return f"{truncated}… (+{hidden} chars)"
+
+    def _emit_debug(self, request_id: str, message: str, *args) -> None:
+        if self.debug_logging:
+            logger.info(f"[OLLAMA DEBUG][{request_id}] " + message, *args)
+
+    def _get_payload_preview(self, prompt: str) -> str:
+        if not prompt:
+            return ""
+        lines = prompt.splitlines()
+        preview_lines = lines[: self.payload_preview_max_lines]
+        preview = "\n".join(preview_lines)
+        if len(lines) > self.payload_preview_max_lines:
+            preview += "\n... (truncated)"
+        return preview
+
+    def _log_payload_preview(self, request_id: str, preview: str) -> None:
+        if not preview:
+            return
+        logger.error(
+            "Ollama payload preview (first %d lines) [request=%s]:\n%s",
+            self.payload_preview_max_lines,
+            request_id,
+            preview,
+        )
+
+    def _collect_streaming_response(
+        self, response: requests.Response, request_id: str
+    ) -> Tuple[Dict[str, Any], str]:
+        chunks: List[str] = []
+        final_payload: Dict[str, Any] = {}
+
+        for idx, line in enumerate(response.iter_lines(decode_unicode=True), start=1):
+            if not line:
+                continue
+
+            try:
+                data = json.loads(line)
+            except json.JSONDecodeError:
+                self._emit_debug(
+                    request_id,
+                    "Chunk %d could not be parsed as JSON: %s",
+                    idx,
+                    line,
+                )
+                continue
+
+            chunk_text = data.get("response", "")
+            if chunk_text:
+                chunks.append(chunk_text)
+                if self.stream_log_chunk_limit:
+                    preview = self._truncate_for_log(chunk_text, self.stream_log_chunk_limit)
+                    self._emit_debug(
+                        request_id,
+                        "Chunk %d received (%d chars): %s",
+                        idx,
+                        len(chunk_text),
+                        preview,
+                    )
+
+            final_payload = data
+            if data.get("done"):
+                break
+
+        aggregated = "".join(chunks).strip()
+        if final_payload:
+            final_payload["response"] = aggregated
+        else:
+            final_payload = {"response": aggregated, "done": True}
+
+        return final_payload, aggregated
     
     def test_connection(self) -> bool:
         """Test połączenia z serwerem Ollama"""
@@ -71,62 +170,142 @@ class OllamaAnalyzer:
             injection_matches = self._detect_prompt_injection(
                 sanitized_text, PROMPT_INJECTION_PATTERNS
             )
+            request_id = uuid.uuid4().hex[:8].upper()
             prompt = self._build_secure_prompt(
                 sanitized_text, analysis_type, OLLAMA_PROMPTS, OLLAMA_SYSTEM_PROMPT
             )
+            payload_preview = self._get_payload_preview(prompt)
             
             # Wywołanie API Ollama
             payload = {
                 "model": self.model,
                 "prompt": prompt,
-                "stream": False,
+                "stream": self.stream_responses,
                 "options": OLLAMA_GENERATION_PARAMS
             }
-            
+            timeout = (self.connect_timeout, self.request_timeout)
+
+            self._emit_debug(
+                request_id,
+                "Prepared request | type=%s | model=%s | prompt_chars=%d | text_chars=%d | stream=%s",
+                analysis_type,
+                self.model,
+                len(prompt),
+                len(sanitized_text),
+                self.stream_responses,
+            )
+            if self.debug_logging and self.prompt_log_max_chars:
+                prompt_debug_preview = self._truncate_for_log(prompt, self.prompt_log_max_chars)
+                self._emit_debug(request_id, "Prompt preview: %s", prompt_debug_preview)
+                options_preview = json.dumps(OLLAMA_GENERATION_PARAMS)
+                self._emit_debug(request_id, "Generation params: %s", options_preview)
+
+            request_kwargs: Dict[str, Any] = {
+                "json": payload,
+                "timeout": timeout,
+            }
+            if self.stream_responses:
+                request_kwargs["stream"] = True
+
             logger.info(f"Wysyłanie zapytania do Ollama (typ: {analysis_type})")
-            response = requests.post(self.api_url, json=payload, timeout=60)
-            
-            if response.status_code == 200:
-                result = response.json()
-                analysis_text = result.get("response", "").strip()
-                
-                # Parsowanie odpowiedzi
-                parsed_result, validation_error = self._parse_and_validate_response(
-                    analysis_text, analysis_type
-                )
-                if isinstance(parsed_result, dict):
-                    if injection_matches:
-                        parsed_result["integrity_alert"] = True
+            start_time = time.monotonic()
+
+            response = requests.post(self.api_url, **request_kwargs)
+            try:
+                duration = time.monotonic() - start_time
+
+                if response.status_code == 200:
+                    if self.stream_responses:
+                        result, analysis_text = self._collect_streaming_response(response, request_id)
                     else:
-                        parsed_result.setdefault("integrity_alert", False)
-                success = validation_error is None
-                
-                if success:
-                    logger.info(f"Analiza zakończona pomyślnie (typ: {analysis_type})")
-                else:
-                    logger.warning(
-                        "Analiza zwróciła nieprawidłowy format: %s", validation_error
+                        result = response.json()
+                        analysis_text = result.get("response", "").strip()
+                        if self.debug_logging and self.prompt_log_max_chars:
+                            response_preview = self._truncate_for_log(
+                                analysis_text, self.prompt_log_max_chars
+                            )
+                            self._emit_debug(
+                                request_id,
+                                "Response preview (%d chars): %s",
+                                len(analysis_text),
+                                response_preview,
+                            )
+
+                    self._emit_debug(
+                        request_id,
+                        "Request completed in %.2fs (status=%s, response_chars=%d)",
+                        duration,
+                        response.status_code,
+                        len(analysis_text),
                     )
-                return {
-                    "success": success,
-                    "analysis_type": analysis_type,
-                    "raw_response": analysis_text,
-                    "parsed_result": parsed_result,
-                    "model_used": self.model,
-                    "injection_detected": bool(injection_matches),
-                    "injection_matches": injection_matches,
-                    "validation_error": validation_error,
-                }
-            else:
-                logger.error(f"Błąd API Ollama: {response.status_code} - {response.text}")
-                return {
-                    "success": False,
-                    "error": f"HTTP {response.status_code}: {response.text}",
-                    "analysis_type": analysis_type
-                }
+
+                    # Parsowanie odpowiedzi
+                    parsed_result, validation_error = self._parse_and_validate_response(
+                        analysis_text, analysis_type
+                    )
+                    if isinstance(parsed_result, dict):
+                        if injection_matches:
+                            parsed_result["integrity_alert"] = True
+                        else:
+                            parsed_result.setdefault("integrity_alert", False)
+                    success = validation_error is None
+                    raw_response_text = analysis_text
+                    if injection_matches and sanitized_text:
+                        preview_limit = 2000
+                        transcript_preview = sanitized_text[:preview_limit]
+                        raw_response_text = (
+                            f"{analysis_text}\n\n[TRANSCRIPT_PREVIEW]\n{transcript_preview}"
+                        )
+                    
+                    if success:
+                        logger.info(f"Analiza zakończona pomyślnie (typ: {analysis_type})")
+                    else:
+                        logger.warning(
+                            "Analiza zwróciła nieprawidłowy format: %s", validation_error
+                        )
+                    return {
+                        "success": success,
+                        "analysis_type": analysis_type,
+                        "raw_response": raw_response_text,
+                        "parsed_result": parsed_result,
+                        "model_used": self.model,
+                        "injection_detected": bool(injection_matches),
+                        "injection_matches": injection_matches,
+                        "validation_error": validation_error,
+                        "request_id": request_id,
+                    }
+                else:
+                    error_preview = self._truncate_for_log(response.text, self.prompt_log_max_chars)
+                    self._emit_debug(
+                        request_id,
+                        "HTTP error %s: %s",
+                        response.status_code,
+                        error_preview,
+                    )
+                    logger.error(f"Błąd API Ollama: {response.status_code} - {error_preview}")
+                    self._log_payload_preview(request_id, payload_preview)
+                    return {
+                        "success": False,
+                        "error": f"HTTP {response.status_code}: {response.text}",
+                        "analysis_type": analysis_type,
+                        "request_id": request_id,
+                    }
+            finally:
+                close_fn = getattr(response, "close", None)
+                if callable(close_fn):
+                    close_fn()
                 
         except Exception as e:
+            self._emit_debug(
+                locals().get("request_id", "NO-ID"),
+                "Exception raised: %s",
+                e,
+            )
             logger.error(f"Błąd podczas analizy treści: {e}")
+            self._log_payload_preview(
+                locals().get("request_id", "NO-ID"),
+                locals().get("payload_preview", ""),
+            )
             return {
                 "success": False,
                 "error": str(e),
@@ -134,6 +313,7 @@ class OllamaAnalyzer:
                 "validation_error": str(e),
                 "injection_detected": bool(injection_matches) if "injection_matches" in locals() else False,
                 "injection_matches": injection_matches if "injection_matches" in locals() else [],
+                "request_id": locals().get("request_id", "NO-ID"),
             }
     
     def _build_secure_prompt(

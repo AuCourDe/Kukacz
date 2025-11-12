@@ -9,10 +9,10 @@ Zawiera główną klasę AudioProcessor która:
 - Obsługuje przetwarzanie równoległe
 - Integruje wszystkie moduły systemu z konfiguracją
 """
-
 import logging
 import shutil
 import threading
+from datetime import datetime
 from pathlib import Path
 from typing import Optional, Union
 
@@ -47,10 +47,10 @@ class AudioProcessor:
         self.transcriber = WhisperTranscriber()
         self.speaker_diarizer = SpeakerDiarizer()
         self.content_analyzer = ContentAnalyzer()
+        self._processed_folder = Path(PROCESSED_FOLDER)
+        self._processed_folder.mkdir(parents=True, exist_ok=True)
         self.result_saver = ResultSaver(output_folder_path)
         self.file_watcher = FileWatcherManager(self, input_folder_path)
-        self.processed_folder = Path(PROCESSED_FOLDER)
-        self.processed_folder.mkdir(parents=True, exist_ok=True)
         
         # Konfiguracja funkcjonalności
         self.enable_speaker_diarization = enable_speaker_diarization
@@ -137,11 +137,6 @@ class AudioProcessor:
             try:
                 logger.info(f"Rozpoczęcie przetwarzania: {audio_file_path.name}")
                 
-                # Sprawdzenie czy plik jest już przetworzony
-                if self.result_saver.is_file_processed(audio_file_path):
-                    logger.info(f"Plik już przetworzony: {audio_file_path.name}")
-                    return
-                
                 # Transkrypcja z rozpoznawaniem mówców
                 transcription_data = self.transcribe_audio_with_speakers(audio_file_path)
                 if transcription_data:
@@ -154,11 +149,16 @@ class AudioProcessor:
                         logger.info(f"Analiza Ollama wyłączona, pominięto analizę treści.")
                     
                     # Zapisanie wyników
+                    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
                     self.result_saver.save_transcription_with_speakers(
-                        audio_file_path, transcription_data, analysis_results
+                        audio_file_path,
+                        transcription_data,
+                        analysis_results,
+                        timestamp=timestamp,
                     )
                     # Przeniesienie przetworzonego pliku do folderu processed
-                    destination = self.processed_folder / audio_file_path.name
+                    destination_name = f"{audio_file_path.stem} {timestamp}{audio_file_path.suffix}"
+                    destination = self.processed_folder / destination_name
                     destination.parent.mkdir(parents=True, exist_ok=True)
                     shutil.move(str(audio_file_path), destination)
                     logger.info(
@@ -171,6 +171,16 @@ class AudioProcessor:
                 
             except Exception as e:
                 logger.error(f"Błąd podczas przetwarzania {audio_file_path.name}: {e}")
+
+    @property
+    def processed_folder(self) -> Path:
+        return self._processed_folder
+
+    @processed_folder.setter
+    def processed_folder(self, value: Union[str, Path]) -> None:
+        new_path = Path(value)
+        new_path.mkdir(parents=True, exist_ok=True)
+        self._processed_folder = new_path
     
     def process_all_files(self) -> None:
         """Przetwarzanie wszystkich plików MP3 w folderze wejściowym"""

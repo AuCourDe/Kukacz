@@ -112,4 +112,5 @@ def test_e2e_prompt_injection_detection(temp_env):
 
     processed_files = list(temp_env["processed_dir"].glob("*.mp3"))
     assert processed_files, "Plik nie został przeniesiony do processed/"
+    assert all(" " in processed.name for processed in processed_files)
 

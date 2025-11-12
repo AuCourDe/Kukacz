@@ -2,6 +2,7 @@ import json as json_module
 from types import SimpleNamespace
 
 import pytest
+import requests
 
 from app.ollama_analyzer import OllamaAnalyzer
 
@@ -98,4 +99,21 @@ def test_sanitizes_control_characters(analyzer):
     sanitized = analyzer._sanitize_transcript(text, 100)  # type: ignore[attr-defined]
     assert "\x00" not in sanitized
     assert sanitized.endswith("World")
+
+
+def test_logs_payload_preview_on_connection_error(monkeypatch, analyzer, caplog):
+    def fake_post(url, *, json=None, timeout=None):
+        raise requests.exceptions.ConnectionError("unreachable")
+
+    monkeypatch.setattr("app.ollama_analyzer.requests.post", fake_post)
+
+    sample_text = "\n".join(f"payload_line_{i:02d}" for i in range(60))
+
+    caplog.set_level("ERROR", logger="app.ollama_analyzer")
+    result = analyzer.analyze_content(sample_text, "general")
+
+    assert result["success"] is False
+    assert "Ollama payload preview (first 40 lines)" in caplog.text
+    assert "payload_line_00" in caplog.text
+    assert "payload_line_55" not in caplog.text
 
