@@ -24,7 +24,10 @@ logger = logging.getLogger(__name__)
 class ResultSaver:
     """Zapisywanie wyników transkrypcji i analizy do plików"""
     
-    def __init__(self, output_folder: Union[str, Path] = "output"):
+    def __init__(
+        self,
+        output_folder: Union[str, Path] = "output",
+    ):
         self.output_folder = Path(output_folder)
         self.output_folder.mkdir(parents=True, exist_ok=True)
         self.reasoning_filter = ReasoningFilter()
@@ -122,15 +125,20 @@ class ResultSaver:
         
         return merged
     
-    def save_transcription_with_speakers(self, audio_file_path: Path, transcription_data: Dict, 
-                                       analysis_results: Optional[Dict] = None) -> Path:
-        """Zapisywanie transkrypcji z informacjami o mówcach i analizą Ollama"""
+    def save_transcription_with_speakers(
+        self,
+        audio_file_path: Path,
+        transcription_data: Dict,
+        analysis_results: Optional[Dict] = None,
+        timestamp: Optional[str] = None,
+    ) -> str:
+        """Zapisywanie transkrypcji z informacjami o mówcach i analizą Ollama."""
         try:
-            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-            output_filename = f"{audio_file_path.stem} {timestamp}.txt"
+            effective_timestamp = timestamp or datetime.now().strftime("%Y%m%d%H%M%S")
+            output_filename = f"{audio_file_path.stem} {effective_timestamp}.txt"
             output_path = self.output_folder / output_filename
 
-            analysis_filename = f"{audio_file_path.stem} ANALIZA {timestamp}.txt"
+            analysis_filename = f"{audio_file_path.stem} ANALIZA {effective_timestamp}.txt"
             analysis_path = self.output_folder / analysis_filename
 
             # Zapisanie transkrypcji tekstowej z rozpoznawaniem mówców
@@ -213,20 +221,12 @@ class ResultSaver:
             logger.info("Analiza zapisana: %s", analysis_path)
 
             logger.info(f"Transkrypcja zapisana: {output_path}")
-            return output_path
+            return effective_timestamp
             
         except Exception as e:
             logger.error(f"Błąd podczas zapisywania transkrypcji: {e}")
             raise
     
-    def is_file_processed(self, audio_file_path: Path) -> bool:
-        """Sprawdzenie czy plik audio został już przetworzony"""
-        pattern = f"{audio_file_path.stem} *.txt"
-        for candidate in self.output_folder.glob(pattern):
-            if "ANALIZA" not in candidate.stem:
-                return True
-        return False
-
     def _prepare_analysis_text(
         self, analysis_results: Optional[Dict], audio_file_path: Path
     ) -> str:
