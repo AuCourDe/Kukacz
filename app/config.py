@@ -222,16 +222,19 @@ OLLAMA_TEMPERATURE: float = _env_float("OLLAMA_TEMPERATURE", 0.7)
 OLLAMA_TOP_P: float = _env_float("OLLAMA_TOP_P", 0.9)
 OLLAMA_TOP_K: int = _env_int("OLLAMA_TOP_K", 40)
 OLLAMA_REPEAT_PENALTY: float = _env_float("OLLAMA_REPEAT_PENALTY", 1.1)
-OLLAMA_MAX_TOKENS: int = _env_int("OLLAMA_MAX_TOKENS", 2048)
+OLLAMA_NUM_PREDICT: int = _env_int("OLLAMA_NUM_PREDICT", -1)  # -1 = default (no limit)
+OLLAMA_STOP_SEQUENCE: str = os.getenv("OLLAMA_STOP_SEQUENCE", "").strip()
 
 OLLAMA_GENERATION_PARAMS = {
     "temperature": OLLAMA_TEMPERATURE,
     "top_p": OLLAMA_TOP_P,
     "top_k": OLLAMA_TOP_K,
     "repeat_penalty": OLLAMA_REPEAT_PENALTY,
-    "max_tokens": OLLAMA_MAX_TOKENS,
-    "stop": None
 }
+if OLLAMA_NUM_PREDICT > 0:
+    OLLAMA_GENERATION_PARAMS["num_predict"] = OLLAMA_NUM_PREDICT
+if OLLAMA_STOP_SEQUENCE:
+    OLLAMA_GENERATION_PARAMS["stop"] = OLLAMA_STOP_SEQUENCE
 
 OLLAMA_CONNECT_TIMEOUT: float = _env_float("OLLAMA_CONNECT_TIMEOUT", 10.0)
 OLLAMA_REQUEST_TIMEOUT: float = _env_float("OLLAMA_REQUEST_TIMEOUT", 60.0)
