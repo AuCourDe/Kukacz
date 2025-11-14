@@ -62,7 +62,7 @@ def temp_env(tmp_path, monkeypatch):
 
     # Patch Ollama HTTP calls
     def fake_get(url, timeout=10):
-        return DummyHTTPResponse(200, {"models": [{"name": "qwen3:8b"}]})
+        return DummyHTTPResponse(200, {"models": [{"name": "gemma3:12b"}]})
 
     def fake_post(url, *, json=None, timeout=None):
         return DummyHTTPResponse(
@@ -100,7 +100,7 @@ def test_e2e_prompt_injection_detection(temp_env):
         enable_ollama_analysis=True,
     )
     processor.processed_folder = temp_env["processed_dir"]
-    processor.initialize_components(whisper_model="tiny", speaker_auth_token="", ollama_model="qwen3:8b")
+    processor.initialize_components(whisper_model="tiny", speaker_auth_token="", ollama_model="gemma3:12b")
 
     processor.process_audio_file(temp_env["audio_file"])
 

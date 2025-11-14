@@ -183,16 +183,16 @@ class AudioProcessor:
         self._processed_folder = new_path
     
     def process_all_files(self) -> None:
-        """Przetwarzanie wszystkich plików MP3 w folderze wejściowym"""
+        """Przetwarzanie wszystkich obsługiwanych plików audio w folderze wejściowym."""
         try:
             # Pobranie nieprzetworzonych plików
             unprocessed_files = self.file_loader.get_unprocessed_files(self.result_saver.output_folder)
             
             if not unprocessed_files:
-                logger.info("Brak plików MP3 do przetworzenia")
+                logger.info("Brak plików audio do przetworzenia")
                 return
             
-            logger.info(f"Znaleziono {len(unprocessed_files)} plików MP3 do przetworzenia")
+            logger.info("Znaleziono %d plików audio do przetworzenia", len(unprocessed_files))
             
             # Przetwarzanie plików w puli wątków
             threads = []

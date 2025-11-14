@@ -8,7 +8,7 @@ Zwróć uwagę na:
 Transkrypcja:
 {text}
 
-Odpowiedz w formacie JSON:
+Odpowiedz w formacie JSON. Wszystkie teksty w odpowiedzi muszą być w języku polskim:
 {
   "summary": "krótkie streszczenie rozmowy",
   "customer_issue": "opis problemu klienta",

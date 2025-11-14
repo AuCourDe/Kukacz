@@ -90,7 +90,7 @@ Wszystkie ustawienia znajdują się w `config.py`:
 ### Ustawienia kluczowe
 - Model Whisper: `WHISPER_MODEL = "large-v3"`
 - Token autoryzacji: `SPEAKER_DIARIZATION_TOKEN`
-- Model Ollama: `OLLAMA_MODEL = "qwen3:8b"`
+- Model Ollama: `OLLAMA_MODEL = "gemma3:12b"`
 
 ### Ustawienia Ollama
 - Prompty do analizy treści, sentymentu i wzorców mówców

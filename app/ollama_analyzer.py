@@ -18,10 +18,12 @@ logger = logging.getLogger(__name__)
 class OllamaAnalyzer:
     """Klasa do analizy treści za pomocą Ollama"""
     
-    def __init__(self, base_url: str = "http://localhost:11434", model: str = "qwen3:8b"):
+    def __init__(self, base_url: str = "http://localhost:11434", model: str = "gemma3:12b"):
         self.base_url = base_url
         self.model = model
         self.api_url = f"{base_url}/api/generate"
+        self.last_connection_error: Optional[str] = None
+        self.last_available_models: List[str] = []
 
         from .config import (
             OLLAMA_CONNECT_TIMEOUT,
@@ -131,18 +133,23 @@ class OllamaAnalyzer:
                 models = response.json().get("models", [])
                 available_models = [model["name"] for model in models]
                 logger.info(f"Dostępne modele Ollama: {available_models}")
+                self.last_available_models = available_models
                 
                 if self.model in available_models:
                     logger.info(f"Model {self.model} jest dostępny")
+                    self.last_connection_error = None
                     return True
                 else:
                     logger.warning(f"Model {self.model} nie jest dostępny. Dostępne: {available_models}")
+                    self.last_connection_error = "model_not_found"
                     return False
             else:
                 logger.error(f"Błąd połączenia z Ollama: {response.status_code}")
+                self.last_connection_error = f"http_{response.status_code}"
                 return False
         except Exception as e:
             logger.error(f"Błąd podczas testowania połączenia z Ollama: {e}")
+            self.last_connection_error = "exception"
             return False
     
     def analyze_content(self, text: str, analysis_type: str = "general") -> Dict[str, Any]:
@@ -347,7 +354,7 @@ class OllamaAnalyzer:
             "[USER]\n"
             f"{user_prompt.strip()}\n"
             "[/USER]\n"
-            "Odpowiedz jedynie poprawnym JSON."
+            "Odpowiedz jedynie poprawnym JSON. Wszystkie teksty w odpowiedzi muszą być w języku polskim."
         )
 
     @staticmethod

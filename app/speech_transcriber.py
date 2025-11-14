@@ -99,7 +99,8 @@ class WhisperTranscriber:
                 encrypted_data = self.encrypt_file(audio_file_path)
                 
                 # Utworzenie tymczasowego pliku do przetwarzania
-                with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as temp_file:
+                safe_suffix = audio_file_path.suffix if audio_file_path.suffix else ".tmp"
+                with tempfile.NamedTemporaryFile(suffix=safe_suffix, delete=False) as temp_file:
                     temp_path = Path(temp_file.name)
                     self.decrypt_file(encrypted_data, temp_path)
                     

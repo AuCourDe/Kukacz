@@ -11,6 +11,7 @@ Zawiera funkcje do:
 """
 
 import logging
+import sys
 from typing import Dict, Any
 
 from .config import (
@@ -56,6 +57,15 @@ class ContentAnalyzer:
                 return True
             else:
                 logger.warning("Nie udało się połączyć z serwerem Ollama")
+                if getattr(self.ollama_analyzer, "last_connection_error", None) == "model_not_found":
+                    available = getattr(self.ollama_analyzer, "last_available_models", [])
+                    human_message = (
+                        f"Wybrany model Ollama '{self.model}' nie jest dostępny na serwerze "
+                        f"{self.base_url}. Dostępne modele: {', '.join(available) or 'brak'}"
+                    )
+                    logger.warning(human_message)
+                    if sys.stdout.isatty():
+                        print(f"\033[38;5;208m{human_message}\033[0m", flush=True)
                 return False
         except Exception as e:
             logger.error(f"Błąd podczas inicjalizacji Ollama: {e}")
