@@ -38,6 +38,9 @@ if load_dotenv:
 # Token autoryzacji dla pyannote.audio (rozpoznawanie mówców)
 SPEAKER_DIARIZATION_TOKEN: str = os.getenv("SPEAKER_DIARIZATION_TOKEN", "")
 
+# Model do segmentacji rozmów (speaker diarization)
+SPEAKER_DIARIZATION_MODEL: str = os.getenv("SPEAKER_DIARIZATION_MODEL", "pyannote/speaker-diarization-3.1")
+
 # Model Whisper do transkrypcji
 WHISPER_MODEL: str = os.getenv("WHISPER_MODEL", "large-v3")
 

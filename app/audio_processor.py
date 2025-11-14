@@ -79,7 +79,11 @@ class AudioProcessor:
             # Inicjalizacja rozpoznawania mówców
             if self.enable_speaker_diarization:
                 self.use_simple_diarization = False
-                success = self.speaker_diarizer.initialize(speaker_auth_token)
+                from .config import SPEAKER_DIARIZATION_MODEL
+                success = self.speaker_diarizer.initialize(
+                    speaker_auth_token, 
+                    model_name=SPEAKER_DIARIZATION_MODEL
+                )
                 if not success:
                     logger.warning(
                         "Zaawansowane rozpoznawanie mówców niedostępne – "

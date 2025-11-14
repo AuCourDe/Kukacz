@@ -11,6 +11,7 @@ Zawiera funkcje do:
 """
 
 import logging
+import os
 from pathlib import Path
 from typing import List, Optional, Dict, Tuple
 import torch
@@ -36,20 +37,36 @@ class SpeakerDiarizer:
         self.initialized = False
         logger.info("SpeakerDiarizer zainicjalizowany")
         
-    def initialize(self, auth_token: Optional[str] = None) -> bool:
+    def initialize(self, auth_token: Optional[str] = None, model_name: Optional[str] = None) -> bool:
         """Inicjalizacja pipeline do rozpoznawania mówców z obsługą różnych metod autoryzacji"""
         if not SPEAKER_DIARIZATION_AVAILABLE:
             logger.warning("pyannote.audio nie jest dostępne")
             return False
+        
+        # Pobranie nazwy modelu z konfiguracji jeśli nie podano
+        if model_name is None:
+            from .config import SPEAKER_DIARIZATION_MODEL, MODEL_CACHE_DIR
+            model_name = SPEAKER_DIARIZATION_MODEL
+        else:
+            from .config import MODEL_CACHE_DIR
+        
+        # Ustawienie katalogu cache dla modeli HuggingFace (używane przez pyannote)
+        cache_dir = MODEL_CACHE_DIR / "huggingface"
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        # Ustawienie zmiennych środowiskowych dla cache HuggingFace
+        os.environ["HF_HOME"] = str(cache_dir)
+        os.environ["TRANSFORMERS_CACHE"] = str(cache_dir)
+        os.environ["HF_DATASETS_CACHE"] = str(cache_dir)
+        logger.info(f"Katalog cache dla modeli pyannote: {cache_dir}")
             
         try:
-            logger.info("Inicjalizacja rozpoznawania mówców...")
+            logger.info(f"Inicjalizacja rozpoznawania mówców z modelem: {model_name}...")
             
             # Próba inicjalizacji z tokenem
             if auth_token:
                 try:
                     self.pipeline = Pipeline.from_pretrained(
-                        "pyannote/speaker-diarization-3.1",
+                        model_name,
                         use_auth_token=auth_token
                     )
                     logger.info("Pipeline zainicjalizowany z tokenem")
@@ -58,27 +75,26 @@ class SpeakerDiarizer:
                     logger.info("Próba inicjalizacji bez tokenu...")
                     try:
                         self.pipeline = Pipeline.from_pretrained(
-                            "pyannote/speaker-diarization-3.1",
+                            model_name,
                             use_auth_token=False
                         )
                         logger.info("Pipeline zainicjalizowany bez tokenu")
                     except:
                         logger.warning("Nie udało się zainicjalizować pipeline")
-                        logger.info("Aby włączyć rozpoznawanie mówców, zaakceptuj warunki na:")
-                        logger.info("https://huggingface.co/pyannote/speaker-diarization-3.1")
-                        logger.info("https://huggingface.co/pyannote/segmentation-3.0")
+                        logger.info(f"Aby włączyć rozpoznawanie mówców, zaakceptuj warunki na:")
+                        logger.info(f"https://huggingface.co/{model_name}")
                         return False
             else:
                 # Próba użycia modelu lokalnego
                 try:
                     self.pipeline = Pipeline.from_pretrained(
-                        "pyannote/speaker-diarization-3.1",
+                        model_name,
                         use_auth_token=False
                     )
                     logger.info("Pipeline zainicjalizowany bez tokenu")
                 except:
                     logger.warning("Brak tokenu autoryzacji dla pyannote.audio")
-                    logger.info("Aby włączyć rozpoznawanie mówców, uzyskaj token na: https://huggingface.co/pyannote/speaker-diarization-3.1")
+                    logger.info(f"Aby włączyć rozpoznawanie mówców, uzyskaj token na: https://huggingface.co/{model_name}")
                     return False
             
             # Przeniesienie na GPU jeśli dostępne
