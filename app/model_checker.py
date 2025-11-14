@@ -21,26 +21,25 @@ def check_whisper_model(model_name: str, cache_dir: Path) -> Tuple[bool, str]:
 
 
 def check_pyannote_model(model_name: str, cache_dir: Path) -> Tuple[bool, str]:
-    """Sprawdzenie czy model pyannote jest dostępny lokalnie"""
+    """Sprawdzenie czy model pyannote jest dostępny lokalnie w folderze models/"""
     try:
-        import os
+        # Sprawdzenie bezpośrednio w models/huggingface/{model_name}
+        model_dir = cache_dir / "huggingface" / model_name.replace("/", "--")
         
-        # Sprawdzenie cache HuggingFace
-        hf_cache = cache_dir / "huggingface"
-        hf_cache.mkdir(parents=True, exist_ok=True)
+        # Sprawdzenie czy model istnieje (sprawdzamy różne możliwe pliki)
+        model_exists = (
+            (model_dir / "pytorch_model.bin").exists() or
+            (model_dir / "model.safetensors").exists() or
+            any(model_dir.glob("*.bin")) or
+            any(model_dir.glob("*.safetensors")) or
+            (model_dir / "config.yaml").exists() or
+            (model_dir / "config.json").exists()
+        )
         
-        # Sprawdzenie różnych możliwych lokalizacji cache HuggingFace
-        possible_paths = [
-            hf_cache / "hub" / f"models--{model_name.replace('/', '--')}",
-            hf_cache / model_name.replace("/", "--"),
-            Path.home() / ".cache" / "huggingface" / "hub" / f"models--{model_name.replace('/', '--')}",
-        ]
+        if model_exists and any(model_dir.iterdir()):
+            return True, f"Model pyannote '{model_name}' znaleziony w {model_dir}"
         
-        for model_path in possible_paths:
-            if model_path.exists() and any(model_path.iterdir()):
-                return True, f"Model pyannote '{model_name}' znaleziony w {model_path}"
-        
-        return False, f"Model pyannote '{model_name}' nie został znaleziony w cache. Sprawdzono: {hf_cache}"
+        return False, f"Model pyannote '{model_name}' nie został znaleziony w {model_dir}"
     except Exception as e:
         return False, f"Błąd podczas sprawdzania modelu pyannote: {e}"
 

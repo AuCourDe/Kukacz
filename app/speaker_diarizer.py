@@ -50,81 +50,48 @@ class SpeakerDiarizer:
         else:
             from .config import MODEL_CACHE_DIR
         
-        # Ustawienie katalogu cache dla modeli HuggingFace (używane przez pyannote)
-        cache_dir = MODEL_CACHE_DIR / "huggingface"
-        cache_dir.mkdir(parents=True, exist_ok=True)
-        # Ustawienie zmiennych środowiskowych dla cache HuggingFace
-        os.environ["HF_HOME"] = str(cache_dir)
-        os.environ["TRANSFORMERS_CACHE"] = str(cache_dir)
-        os.environ["HF_DATASETS_CACHE"] = str(cache_dir)
-        logger.info(f"Katalog cache dla modeli pyannote: {cache_dir}")
+        # Ustawienie katalogu dla modeli pyannote (bezpośrednio w models/, bez cache)
+        model_dir = MODEL_CACHE_DIR / "huggingface" / model_name.replace("/", "--")
+        model_dir.mkdir(parents=True, exist_ok=True)
+        logger.info(f"Katalog dla modeli pyannote: {model_dir}")
             
         try:
             logger.info(f"Inicjalizacja rozpoznawania mówców z modelem: {model_name}...")
             
-            # Próba inicjalizacji z tokenem
-            if auth_token:
+            # Sprawdzenie czy model już istnieje lokalnie
+            model_exists = (model_dir / "pytorch_model.bin").exists() or \
+                          (model_dir / "model.safetensors").exists() or \
+                          any(model_dir.glob("*.bin")) or \
+                          any(model_dir.glob("*.safetensors"))
+            
+            if not model_exists:
+                # Pobranie modelu bezpośrednio do model_dir (bez cache)
+                logger.info(f"Model nie został znaleziony w {model_dir}, pobieranie...")
                 try:
-                    # Najpierw próba z local_files_only (jeśli model jest w cache)
-                    try:
-                        self.pipeline = Pipeline.from_pretrained(
-                            model_name,
-                            use_auth_token=auth_token,
-                            local_files_only=True
-                        )
-                        logger.info("Pipeline zainicjalizowany z tokenem (model lokalny)")
-                    except Exception:
-                        # Jeśli nie ma lokalnie, pobierz
-                        logger.info("Model nie jest w cache lokalnym, pobieranie...")
-                        self.pipeline = Pipeline.from_pretrained(
-                            model_name,
-                            use_auth_token=auth_token
-                        )
-                        logger.info("Pipeline zainicjalizowany z tokenem (pobrano model)")
+                    from huggingface_hub import snapshot_download
+                    snapshot_download(
+                        repo_id=model_name,
+                        local_dir=str(model_dir),
+                        token=auth_token if auth_token else None,
+                        local_files_only=False,
+                    )
+                    logger.info(f"Model pobrany do {model_dir}")
                 except Exception as e:
-                    logger.warning(f"Nie udało się zainicjalizować z tokenem: {e}")
-                    logger.info("Próba inicjalizacji bez tokenu...")
-                    try:
-                        try:
-                            self.pipeline = Pipeline.from_pretrained(
-                                model_name,
-                                use_auth_token=False,
-                                local_files_only=True
-                            )
-                            logger.info("Pipeline zainicjalizowany bez tokenu (model lokalny)")
-                        except Exception:
-                            logger.info("Model nie jest w cache lokalnym, pobieranie...")
-                            self.pipeline = Pipeline.from_pretrained(
-                                model_name,
-                                use_auth_token=False
-                            )
-                            logger.info("Pipeline zainicjalizowany bez tokenu (pobrano model)")
-                    except Exception as e2:
-                        logger.warning(f"Nie udało się zainicjalizować pipeline: {e2}")
-                        logger.info(f"Aby włączyć rozpoznawanie mówców, zaakceptuj warunki na:")
-                        logger.info(f"https://huggingface.co/{model_name}")
-                        return False
-            else:
-                # Próba użycia modelu lokalnego
-                try:
-                    try:
-                        self.pipeline = Pipeline.from_pretrained(
-                            model_name,
-                            use_auth_token=False,
-                            local_files_only=True
-                        )
-                        logger.info("Pipeline zainicjalizowany bez tokenu (model lokalny)")
-                    except Exception:
-                        logger.info("Model nie jest w cache lokalnym, pobieranie...")
-                        self.pipeline = Pipeline.from_pretrained(
-                            model_name,
-                            use_auth_token=False
-                        )
-                        logger.info("Pipeline zainicjalizowany bez tokenu (pobrano model)")
-                except Exception as e:
-                    logger.warning(f"Brak tokenu autoryzacji dla pyannote.audio: {e}")
-                    logger.info(f"Aby włączyć rozpoznawanie mówców, uzyskaj token na: https://huggingface.co/{model_name}")
+                    logger.warning(f"Nie udało się pobrać modelu: {e}")
+                    if not auth_token:
+                        logger.info(f"Aby pobrać model, uzyskaj token na: https://huggingface.co/{model_name}")
                     return False
+            
+            # Załadowanie modelu z lokalnego folderu
+            try:
+                self.pipeline = Pipeline.from_pretrained(
+                    str(model_dir),
+                    local_files_only=True
+                )
+                logger.info(f"Pipeline zainicjalizowany z lokalnego folderu: {model_dir}")
+            except Exception as e:
+                logger.error(f"Nie udało się załadować modelu z {model_dir}: {e}")
+                return False
             
             # Przeniesienie na GPU jeśli dostępne
             if torch.cuda.is_available():
