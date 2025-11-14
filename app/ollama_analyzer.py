@@ -491,7 +491,7 @@ Odpowiedź w formacie JSON:
             "general": ["summary", "key_points", "tone", "length_category"],
             "sentiment": ["sentiment", "confidence", "emotions", "intensity"],
             "content_quality": ["readability", "clarity", "completeness", "issues", "suggestions"],
-            "call_center": ["summary", "customer_issue", "agent_performance", "emotions", "recommendations"],
+            "call_center": ["brief_summary", "summary", "customer_issue", "agent_performance", "emotions", "recommendations"],
         }
         keys = required_keys.get(analysis_type, ["summary"])
         missing = [key for key in keys if key not in parsed]

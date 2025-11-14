@@ -11,6 +11,7 @@ Zawiera funkcje do:
 - Obsługi różnych formatów wyjściowych
 """
 
+import copy
 import json
 import logging
 from datetime import datetime
@@ -260,9 +261,19 @@ class ResultSaver:
 
         if content_analysis and content_analysis.get("parsed_result"):
             try:
-                return json.dumps(content_analysis["parsed_result"], ensure_ascii=False, indent=2)
+                parsed = content_analysis["parsed_result"]
+                # Jeśli jest brief_summary, wyświetl je na początku
+                if isinstance(parsed, dict) and "brief_summary" in parsed:
+                    parsed_copy = copy.deepcopy(parsed)
+                    brief = parsed_copy.pop("brief_summary")
+                    result = f"📋 Krótkie podsumowanie rozmowy:\n{brief}\n\n"
+                    result += "📊 Szczegółowa analiza:\n"
+                    result += json.dumps(parsed_copy, ensure_ascii=False, indent=2)
+                    return warning + result
+                else:
+                    return warning + json.dumps(parsed, ensure_ascii=False, indent=2)
             except Exception:
-                return str(content_analysis["parsed_result"])
+                return warning + str(content_analysis["parsed_result"])
 
         return (
             f"Analiza Ollama niedostępna dla pliku {audio_file_path.name}. "
