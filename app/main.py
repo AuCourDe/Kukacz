@@ -11,13 +11,17 @@ import time
 from .config import (
     WHISPER_MODEL,
     SPEAKER_DIARIZATION_TOKEN,
+    SPEAKER_DIARIZATION_MODEL,
     OLLAMA_MODEL,
+    OLLAMA_BASE_URL,
+    MODEL_CACHE_DIR,
     LOG_LEVEL,
     LOG_FILE,
     ENABLE_SPEAKER_DIARIZATION,
     ENABLE_OLLAMA_ANALYSIS,
 )
 from .audio_processor import AudioProcessor
+from .model_checker import check_all_models
 
 # Konfiguracja logowania
 LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -48,6 +52,24 @@ def main():
             sys.exit(1)
 
         logger.info("=== Uruchamianie aplikacji Whisper Analyzer ===")
+        
+        # Sprawdzenie dostępności modeli przed uruchomieniem
+        logger.info("Sprawdzanie dostępności modeli...")
+        continue_launch = check_all_models(
+            whisper_model=WHISPER_MODEL,
+            whisper_cache_dir=MODEL_CACHE_DIR,
+            enable_speaker_diarization=ENABLE_SPEAKER_DIARIZATION,
+            speaker_diarization_model=SPEAKER_DIARIZATION_MODEL,
+            speaker_cache_dir=MODEL_CACHE_DIR,
+            enable_ollama_analysis=ENABLE_OLLAMA_ANALYSIS,
+            ollama_model=OLLAMA_MODEL,
+            ollama_base_url=OLLAMA_BASE_URL,
+        )
+        
+        if not continue_launch:
+            logger.info("Uruchamianie aplikacji przerwane przez użytkownika")
+            print("\nUruchamianie aplikacji zostało przerwane.")
+            sys.exit(0)
         
         # Inicjalizacja procesora audio
         processor = AudioProcessor(

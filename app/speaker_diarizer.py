@@ -65,35 +65,64 @@ class SpeakerDiarizer:
             # Próba inicjalizacji z tokenem
             if auth_token:
                 try:
-                    self.pipeline = Pipeline.from_pretrained(
-                        model_name,
-                        use_auth_token=auth_token
-                    )
-                    logger.info("Pipeline zainicjalizowany z tokenem")
+                    # Najpierw próba z local_files_only (jeśli model jest w cache)
+                    try:
+                        self.pipeline = Pipeline.from_pretrained(
+                            model_name,
+                            use_auth_token=auth_token,
+                            local_files_only=True
+                        )
+                        logger.info("Pipeline zainicjalizowany z tokenem (model lokalny)")
+                    except Exception:
+                        # Jeśli nie ma lokalnie, pobierz
+                        logger.info("Model nie jest w cache lokalnym, pobieranie...")
+                        self.pipeline = Pipeline.from_pretrained(
+                            model_name,
+                            use_auth_token=auth_token
+                        )
+                        logger.info("Pipeline zainicjalizowany z tokenem (pobrano model)")
                 except Exception as e:
                     logger.warning(f"Nie udało się zainicjalizować z tokenem: {e}")
                     logger.info("Próba inicjalizacji bez tokenu...")
                     try:
-                        self.pipeline = Pipeline.from_pretrained(
-                            model_name,
-                            use_auth_token=False
-                        )
-                        logger.info("Pipeline zainicjalizowany bez tokenu")
-                    except:
-                        logger.warning("Nie udało się zainicjalizować pipeline")
+                        try:
+                            self.pipeline = Pipeline.from_pretrained(
+                                model_name,
+                                use_auth_token=False,
+                                local_files_only=True
+                            )
+                            logger.info("Pipeline zainicjalizowany bez tokenu (model lokalny)")
+                        except Exception:
+                            logger.info("Model nie jest w cache lokalnym, pobieranie...")
+                            self.pipeline = Pipeline.from_pretrained(
+                                model_name,
+                                use_auth_token=False
+                            )
+                            logger.info("Pipeline zainicjalizowany bez tokenu (pobrano model)")
+                    except Exception as e2:
+                        logger.warning(f"Nie udało się zainicjalizować pipeline: {e2}")
                         logger.info(f"Aby włączyć rozpoznawanie mówców, zaakceptuj warunki na:")
                         logger.info(f"https://huggingface.co/{model_name}")
                         return False
             else:
                 # Próba użycia modelu lokalnego
                 try:
-                    self.pipeline = Pipeline.from_pretrained(
-                        model_name,
-                        use_auth_token=False
-                    )
-                    logger.info("Pipeline zainicjalizowany bez tokenu")
-                except:
-                    logger.warning("Brak tokenu autoryzacji dla pyannote.audio")
+                    try:
+                        self.pipeline = Pipeline.from_pretrained(
+                            model_name,
+                            use_auth_token=False,
+                            local_files_only=True
+                        )
+                        logger.info("Pipeline zainicjalizowany bez tokenu (model lokalny)")
+                    except Exception:
+                        logger.info("Model nie jest w cache lokalnym, pobieranie...")
+                        self.pipeline = Pipeline.from_pretrained(
+                            model_name,
+                            use_auth_token=False
+                        )
+                        logger.info("Pipeline zainicjalizowany bez tokenu (pobrano model)")
+                except Exception as e:
+                    logger.warning(f"Brak tokenu autoryzacji dla pyannote.audio: {e}")
                     logger.info(f"Aby włączyć rozpoznawanie mówców, uzyskaj token na: https://huggingface.co/{model_name}")
                     return False
             
