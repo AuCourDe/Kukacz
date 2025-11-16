@@ -100,7 +100,7 @@ class AudioProcessor:
                     logger.warning("Analiza Ollama będzie wyłączona")
                     self.enable_ollama_analysis = False
             
-            logger.info("Wszystkie komponenty zainicjalizowane pomyślnie")
+            logger.success("Wszystkie komponenty zainicjalizowane pomyślnie")
             
         except Exception as e:
             logger.error(f"Błąd podczas inicjalizacji komponentów: {e}")
@@ -165,7 +165,7 @@ class AudioProcessor:
                     destination = self.processed_folder / destination_name
                     destination.parent.mkdir(parents=True, exist_ok=True)
                     shutil.move(str(audio_file_path), destination)
-                    logger.info(
+                    logger.success(
                         "Przetwarzanie zakończone pomyślnie: %s (przeniesiono do %s)",
                         audio_file_path.name,
                         destination,
@@ -212,7 +212,7 @@ class AudioProcessor:
             for thread in threads:
                 thread.join()
             
-            logger.info("Przetwarzanie wszystkich plików zakończone")
+            logger.success("Przetwarzanie wszystkich plików zakończone")
             
         except Exception as e:
             logger.error(f"Błąd podczas przetwarzania plików: {e}")

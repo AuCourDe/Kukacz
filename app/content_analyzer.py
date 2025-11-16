@@ -21,6 +21,7 @@ from .config import (
     OLLAMA_PROMPTS,
 )
 from .reasoning_filter import ReasoningFilter
+from .colored_logging import print_colored
 
 # Import OllamaAnalyzer
 try:
@@ -59,13 +60,27 @@ class ContentAnalyzer:
                 logger.warning("Nie udało się połączyć z serwerem Ollama")
                 if getattr(self.ollama_analyzer, "last_connection_error", None) == "model_not_found":
                     available = getattr(self.ollama_analyzer, "last_available_models", [])
-                    human_message = (
-                        f"Wybrany model Ollama '{self.model}' nie jest dostępny na serwerze "
-                        f"{self.base_url}. Dostępne modele: {', '.join(available) or 'brak'}"
+                    # Formatowanie listy dostępnych modeli
+                    if available:
+                        models_list = ', '.join(available)
+                        models_info = f"Dostępne modele: {models_list}"
+                    else:
+                        models_info = "Brak dostępnych modeli na serwerze"
+                    
+                    # Komunikat w logach
+                    logger.warning(
+                        f"Model Ollama '{self.model}' nie jest dostępny na serwerze {self.base_url}. "
+                        f"{models_info}"
                     )
-                    logger.warning(human_message)
-                    if sys.stdout.isatty():
-                        print(f"\033[38;5;208m{human_message}\033[0m", flush=True)
+                    
+                    # Komunikat w terminalu z kolorem pomarańczowym
+                    warning_msg = (
+                        f"\n⚠️  OSTRZEŻENIE: Model Ollama '{self.model}' nie jest dostępny na serwerze!\n"
+                        f"   {models_info}\n"
+                        f"   Analiza Ollama będzie wyłączona. Aby włączyć analizę, ustaw w .env:\n"
+                        f"   OLLAMA_MODEL=jedna_z_dostępnych_nazw_modeli\n"
+                    )
+                    print_colored(warning_msg, "WARNING", sys.stderr)
                 return False
         except Exception as e:
             logger.error(f"Błąd podczas inicjalizacji Ollama: {e}")

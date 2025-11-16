@@ -21,25 +21,42 @@ def check_whisper_model(model_name: str, cache_dir: Path) -> Tuple[bool, str]:
 
 
 def check_pyannote_model(model_name: str, cache_dir: Path) -> Tuple[bool, str]:
-    """Sprawdzenie czy model pyannote jest dostępny lokalnie w folderze models/"""
+    """Sprawdzenie czy model pyannote jest dostępny lokalnie w folderze models/pyannote"""
     try:
-        # Sprawdzenie bezpośrednio w models/huggingface/{model_name}
-        model_dir = cache_dir / "huggingface" / model_name.replace("/", "--")
+        # Sprawdzenie w models/pyannote (struktura cache HuggingFace)
+        pyannote_cache_dir = cache_dir / "pyannote"
+        model_cache_name = model_name.replace("/", "--")
         
-        # Sprawdzenie czy model istnieje (sprawdzamy różne możliwe pliki)
-        model_exists = (
-            (model_dir / "pytorch_model.bin").exists() or
-            (model_dir / "model.safetensors").exists() or
-            any(model_dir.glob("*.bin")) or
-            any(model_dir.glob("*.safetensors")) or
-            (model_dir / "config.yaml").exists() or
-            (model_dir / "config.json").exists()
-        )
+        # Sprawdzamy w dwóch możliwych lokalizacjach:
+        # 1. models/pyannote/hub/models--org--model (standardowa struktura HF)
+        # 2. models/pyannote/models--org--model (alternatywna struktura)
+        possible_paths = [
+            pyannote_cache_dir / "hub" / f"models--{model_cache_name}",
+            pyannote_cache_dir / f"models--{model_cache_name}",
+        ]
         
-        if model_exists and any(model_dir.iterdir()):
-            return True, f"Model pyannote '{model_name}' znaleziony w {model_dir}"
+        for model_cache_path in possible_paths:
+            if model_cache_path.exists():
+                # Sprawdzamy czy są pliki modelu (w snapshots, blobs lub bezpośrednio)
+                model_exists = (
+                    any(model_cache_path.rglob("*.bin")) or
+                    any(model_cache_path.rglob("*.safetensors")) or
+                    any(model_cache_path.rglob("config.yaml")) or
+                    any(model_cache_path.rglob("config.json")) or
+                    any(model_cache_path.rglob("*.pt")) or
+                    any(model_cache_path.rglob("*.pth")) or
+                    (model_cache_path / "blobs").exists() or
+                    (model_cache_path / "snapshots").exists()
+                )
+                
+                if model_exists:
+                    # Znajdź konkretną ścieżkę do modelu
+                    snapshot_dirs = list((model_cache_path / "snapshots").glob("*")) if (model_cache_path / "snapshots").exists() else []
+                    if snapshot_dirs:
+                        return True, f"Model pyannote '{model_name}' znaleziony w {snapshot_dirs[0]}"
+                    return True, f"Model pyannote '{model_name}' znaleziony w {model_cache_path}"
         
-        return False, f"Model pyannote '{model_name}' nie został znaleziony w {model_dir}"
+        return False, f"Model pyannote '{model_name}' nie został znaleziony w {pyannote_cache_dir}"
     except Exception as e:
         return False, f"Błąd podczas sprawdzania modelu pyannote: {e}"
 

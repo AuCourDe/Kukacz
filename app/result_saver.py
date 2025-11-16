@@ -219,9 +219,9 @@ class ResultSaver:
                     audio_file_path.stem,
                 )
 
-            logger.info("Analiza zapisana: %s", analysis_path)
+            logger.success("Analiza zapisana: %s", analysis_path)
 
-            logger.info(f"Transkrypcja zapisana: {output_path}")
+            logger.success(f"Transkrypcja zapisana: {output_path}")
             return effective_timestamp
             
         except Exception as e:

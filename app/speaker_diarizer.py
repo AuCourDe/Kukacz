@@ -18,6 +18,27 @@ import torch
 import numpy as np
 from collections import defaultdict
 
+# Monkey-patch dla kompatybilności z nowszymi wersjami huggingface_hub
+# PyAnnote używa use_auth_token, ale nowsze wersje używają token
+try:
+    import huggingface_hub.file_download
+    original_hf_hub_download = huggingface_hub.file_download.hf_hub_download
+    import functools
+    
+    @functools.wraps(original_hf_hub_download)
+    def patched_hf_hub_download(*args, **kwargs):
+        # Zamiana use_auth_token na token
+        if 'use_auth_token' in kwargs:
+            token_value = kwargs.pop('use_auth_token')
+            if token_value and 'token' not in kwargs:
+                kwargs['token'] = token_value
+        return original_hf_hub_download(*args, **kwargs)
+    
+    # Zastosowanie monkey-patch przed importem PyAnnote
+    huggingface_hub.file_download.hf_hub_download = patched_hf_hub_download
+except Exception:
+    pass  # Jeśli nie uda się zastosować patch, kontynuuj normalnie
+
 # Importy dla rozpoznawania mówców
 try:
     from pyannote.audio import Pipeline
@@ -50,47 +71,58 @@ class SpeakerDiarizer:
         else:
             from .config import MODEL_CACHE_DIR
         
-        # Ustawienie katalogu dla modeli pyannote (bezpośrednio w models/, bez cache)
-        model_dir = MODEL_CACHE_DIR / "huggingface" / model_name.replace("/", "--")
-        model_dir.mkdir(parents=True, exist_ok=True)
-        logger.info(f"Katalog dla modeli pyannote: {model_dir}")
+        # Ustawienie katalogu dla modeli pyannote w models/pyannote
+        pyannote_cache_dir = MODEL_CACHE_DIR / "pyannote"
+        pyannote_cache_dir.mkdir(parents=True, exist_ok=True)
+        logger.info(f"Katalog cache dla modeli pyannote: {pyannote_cache_dir}")
+        
+        # Ustawienie zmiennych środowiskowych dla HuggingFace
+        os.environ["HF_HOME"] = str(pyannote_cache_dir)
+        os.environ["HUGGINGFACE_HUB_CACHE"] = str(pyannote_cache_dir / "hub")
+        if auth_token:
+            os.environ["HF_TOKEN"] = auth_token
+        (pyannote_cache_dir / "hub").mkdir(parents=True, exist_ok=True)
             
         try:
             logger.info(f"Inicjalizacja rozpoznawania mówców z modelem: {model_name}...")
+            logger.info(f"Używanie cache: {pyannote_cache_dir}")
             
-            # Sprawdzenie czy model już istnieje lokalnie
-            model_exists = (model_dir / "pytorch_model.bin").exists() or \
-                          (model_dir / "model.safetensors").exists() or \
-                          any(model_dir.glob("*.bin")) or \
-                          any(model_dir.glob("*.safetensors"))
+            # Sprawdzenie czy model już istnieje w cache
+            hub_cache_dir = pyannote_cache_dir / "hub"
+            model_exists = False
+            if hub_cache_dir.exists():
+                # Sprawdzamy czy model jest w cache HuggingFace (struktura: models--org--model)
+                model_cache_name = model_name.replace("/", "--")
+                model_cache_path = hub_cache_dir / f"models--{model_cache_name}"
+                if model_cache_path.exists() and (any(model_cache_path.rglob("*.bin")) or any(model_cache_path.rglob("*.safetensors"))):
+                    model_exists = True
+                    logger.info(f"Model znaleziony w cache: {model_cache_path}")
             
             if not model_exists:
-                # Pobranie modelu bezpośrednio do model_dir (bez cache)
-                logger.info(f"Model nie został znaleziony w {model_dir}, pobieranie...")
-                try:
-                    from huggingface_hub import snapshot_download
-                    snapshot_download(
-                        repo_id=model_name,
-                        local_dir=str(model_dir),
-                        token=auth_token if auth_token else None,
-                        local_files_only=False,
-                    )
-                    logger.info(f"Model pobrany do {model_dir}")
-                except Exception as e:
-                    logger.warning(f"Nie udało się pobrać modelu: {e}")
-                    if not auth_token:
-                        logger.info(f"Aby pobrać model, uzyskaj token na: https://huggingface.co/{model_name}")
-                    return False
+                logger.info(f"Model nie został znaleziony w cache, pobieranie do {pyannote_cache_dir}...")
             
-            # Załadowanie modelu z lokalnego folderu
+            # Załadowanie modelu - Pipeline.from_pretrained automatycznie pobierze model jeśli nie istnieje
             try:
+                # Logowanie do HuggingFace jeśli token jest dostępny
+                if auth_token:
+                    try:
+                        from huggingface_hub import login
+                        login(token=auth_token, add_to_git_credential=False)
+                        logger.info("Zalogowano do HuggingFace Hub")
+                    except Exception as login_error:
+                        logger.warning(f"Nie udało się zalogować do HuggingFace Hub: {login_error}")
+                
+                # Pipeline.from_pretrained automatycznie użyje tokenu z zmiennej środowiskowej lub z logowania
+                # Monkey-patch został już zastosowany na początku modułu
                 self.pipeline = Pipeline.from_pretrained(
-                    str(model_dir),
-                    local_files_only=True
+                    model_name,
+                    cache_dir=str(pyannote_cache_dir)
                 )
-                logger.info(f"Pipeline zainicjalizowany z lokalnego folderu: {model_dir}")
+                logger.info(f"Pipeline zainicjalizowany pomyślnie. Modele zapisane w: {pyannote_cache_dir}")
             except Exception as e:
-                logger.error(f"Nie udało się załadować modelu z {model_dir}: {e}")
+                logger.error(f"Nie udało się załadować modelu: {e}")
+                if not auth_token:
+                    logger.info(f"Aby pobrać model, uzyskaj token na: https://huggingface.co/{model_name}")
                 return False
             
             # Przeniesienie na GPU jeśli dostępne

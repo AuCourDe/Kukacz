@@ -22,16 +22,13 @@ from .config import (
 )
 from .audio_processor import AudioProcessor
 from .model_checker import check_all_models
+from .colored_logging import setup_colored_logging, print_colored
 
-# Konfiguracja logowania
-LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
-logging.basicConfig(
-    level=getattr(logging, LOG_LEVEL),
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler(str(LOG_FILE)),
-        logging.StreamHandler(sys.stdout)
-    ]
+# Konfiguracja logowania z obsługą kolorów
+setup_colored_logging(
+    level=LOG_LEVEL,
+    log_file=str(LOG_FILE),
+    enable_colors=True
 )
 logger = logging.getLogger(__name__)
 
@@ -84,20 +81,45 @@ def main():
             ollama_model=OLLAMA_MODEL
         )
         
+        # Sprawdzenie czy model Ollama został poprawnie zainicjalizowany
+        if ENABLE_OLLAMA_ANALYSIS:
+            if not processor.content_analyzer or not processor.content_analyzer.initialized:
+                try:
+                    import requests
+                    response = requests.get(f"{OLLAMA_BASE_URL}/api/tags", timeout=5)
+                    if response.status_code == 200:
+                        models = response.json().get("models", [])
+                        available_models = [model["name"] for model in models]
+                        if OLLAMA_MODEL not in available_models:
+                            warning_msg = (
+                                f"\n⚠️  OSTRZEŻENIE: Model Ollama '{OLLAMA_MODEL}' nie jest dostępny na serwerze!\n"
+                                f"   Dostępne modele: {', '.join(available_models) or 'brak'}\n"
+                                f"   Analiza Ollama będzie wyłączona. Aby włączyć analizę, ustaw w .env:\n"
+                                f"   OLLAMA_MODEL=jedna_z_dostępnych_nazw_modeli\n"
+                            )
+                            print_colored(warning_msg, "WARNING", sys.stderr)
+                            logger.warning(
+                                f"Model Ollama '{OLLAMA_MODEL}' nie jest dostępny. "
+                                f"Dostępne modele: {', '.join(available_models)}"
+                            )
+                except Exception as e:
+                    logger.debug(f"Nie udało się sprawdzić dostępności modeli Ollama: {e}")
+        
         # Przetwarzanie istniejących plików
         logger.info("Przetwarzanie istniejących plików...")
         processor.process_all_files()
+        logger.success("Przetwarzanie wszystkich plików zakończone")
 
         run_once = os.getenv("APP_RUN_ONCE", "false").lower() == "true"
         if run_once:
-            logger.info("Tryb jednorazowy aktywny (APP_RUN_ONCE=1) – kończę po pierwszym przebiegu.")
+            logger.success("Tryb jednorazowy aktywny (APP_RUN_ONCE=1) – kończę po pierwszym przebiegu.")
             return
         
         # Uruchomienie obserwatora folderu
         logger.info("Uruchamianie obserwatora folderu...")
         processor.start_file_watcher()
         
-        logger.info("Aplikacja uruchomiona. Oczekiwanie na nowe pliki...")
+        logger.success("Aplikacja uruchomiona. Oczekiwanie na nowe pliki...")
         logger.info(f"Umieść pliki MP3 w folderze: {processor.file_loader.input_folder}")
         logger.info("Naciśnij Ctrl+C aby zatrzymać")
         
@@ -108,10 +130,10 @@ def main():
         except KeyboardInterrupt:
             logger.info("Otrzymano sygnał zatrzymania...")
             processor.stop_file_watcher()
-            logger.info("Aplikacja zatrzymana")
+            logger.success("Aplikacja zatrzymana")
         
     except Exception as e:
-        logger.error(f"Błąd krytyczny: {e}")
+        logger.critical(f"Błąd krytyczny: {e}")
         sys.exit(1)
 
 if __name__ == "__main__":
