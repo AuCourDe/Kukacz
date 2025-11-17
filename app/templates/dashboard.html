@@ -2,7 +2,7 @@
 <html lang="pl">
   <head>
     <meta charset="utf-8" />
-    <title>Whisper Analyzer – panel</title>
+    <title>Gacek 🦇 – panel</title>
     <style>
       :root {
         color-scheme: dark;
@@ -26,11 +26,14 @@
         display: flex;
         justify-content: space-between;
         align-items: center;
+        position: relative;
       }
       header h1 {
         margin: 0;
         font-size: 1.4rem;
         letter-spacing: 0.5px;
+        flex: 1;
+        text-align: center;
       }
       header a {
         color: #fff;
@@ -166,13 +169,12 @@
   </head>
   <body>
     <header>
-      <h1>Whisper Analyzer – panel webowy</h1>
+      <h1>Gacek 🦇</h1>
       <a href="{{ url_for('logout') }}">Wyloguj</a>
     </header>
     <main>
       <section class="card">
         <h2>Dodaj pliki audio</h2>
-        <p>{{ estimated_hint }}</p>
         <p>Obsługiwane formaty: {{ allowed_extensions|join(', ') }}</p>
         {% with messages = get_flashed_messages(with_categories=true) %}
           {% if messages %}
@@ -188,14 +190,13 @@
       </section>
 
       <section class="card">
-        <h2>Jawna kolejka przetwarzania</h2>
+        <h2>Kolejka przetwarzania</h2>
         <div class="queue-wrapper">
           <table>
             <thead>
               <tr>
                 <th>Plik</th>
                 <th>Rozmiar</th>
-                <th>Szacowany czas</th>
                 <th>Status</th>
                 <th>Wyniki</th>
               </tr>
@@ -203,7 +204,7 @@
             <tbody id="queue-body">
               {% if not queue_items %}
                 <tr class="queue-empty">
-                  <td colspan="5">Brak zadań w kolejce.</td>
+                  <td colspan="4">Brak zadań w kolejce.</td>
                 </tr>
               {% else %}
                 {% for item in queue_items %}
@@ -214,12 +215,15 @@
                       <small>Dodano: {{ item.created_at }}</small>
                     </td>
                     <td>{{ item.size_mb }} MB</td>
-                    <td>{{ item.estimated_minutes }} min</td>
                     <td>
                       <span class="status {{ item.status }}">
                         {{ status_labels[item.status] }}
                       </span>
-                      {% if item.error %}
+                      {% if item.status == "processing" %}
+                        <br /><small id="countdown-{{ item.id }}">Obliczanie...</small>
+                      {% elif item.status == "completed" and item.processing_time %}
+                        <br /><small>Czas przetwarzania: {{ item.processing_time }}</small>
+                      {% elif item.error %}
                         <br /><small>{{ item.error }}</small>
                       {% endif %}
                     </td>
@@ -257,9 +261,63 @@
         }
       }
 
+      // Mapa do przechowywania czasu rozpoczęcia przetwarzania dla odliczania
+      const processingStarts = new Map();
+      const countdownIntervals = new Map();
+
+      function formatTime(seconds) {
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        if (mins > 0) {
+          return `${mins}m ${secs}s`;
+        }
+        return `${secs}s`;
+      }
+
+      function updateCountdown(itemId, estimatedMinutes, startedAt) {
+        if (!startedAt) return;
+
+        const startTime = new Date(startedAt).getTime();
+        const estimatedMs = estimatedMinutes * 60 * 1000;
+        const endTime = startTime + estimatedMs;
+
+        function update() {
+          const now = Date.now();
+          const elapsed = Math.floor((now - startTime) / 1000);
+          const remaining = Math.max(0, Math.floor((endTime - now) / 1000));
+
+          const countdownEl = document.getElementById(`countdown-${itemId}`);
+          if (countdownEl) {
+            if (remaining > 0) {
+              countdownEl.textContent = `Pozostało: ${formatTime(remaining)}`;
+            } else {
+              countdownEl.textContent = `Przetwarzanie... (${formatTime(elapsed)})`;
+            }
+          }
+        }
+
+        // Aktualizuj od razu
+        update();
+
+        // Ustaw interwał aktualizacji co sekundę
+        if (countdownIntervals.has(itemId)) {
+          clearInterval(countdownIntervals.get(itemId));
+        }
+        const interval = setInterval(update, 1000);
+        countdownIntervals.set(itemId, interval);
+      }
+
+      function stopCountdown(itemId) {
+        if (countdownIntervals.has(itemId)) {
+          clearInterval(countdownIntervals.get(itemId));
+          countdownIntervals.delete(itemId);
+        }
+        processingStarts.delete(itemId);
+      }
+
       function renderQueue(items) {
         if (!items.length) {
-          queueBody.innerHTML = '<tr class="queue-empty"><td colspan="5">Brak zadań w kolejce.</td></tr>';
+          queueBody.innerHTML = '<tr class="queue-empty"><td colspan="4">Brak zadań w kolejce.</td></tr>';
           return;
         }
         queueBody.innerHTML = items
@@ -269,12 +327,32 @@
                 ? `<a href="/download/${item.id}/transcription">Transkrypcja</a>
                    <a href="/download/${item.id}/analysis">Analiza</a>`
                 : "<small>–</small>";
-            const error = item.error ? `<br><small>${item.error}</small>` : "";
+            
+            let statusHtml = `<span class="status ${item.status}">${statusLabels[item.status] || item.status}</span>`;
+            
+            if (item.status === "processing" && item.started_at) {
+              // Uruchom odliczanie dla przetwarzających zadań
+              if (!processingStarts.has(item.id)) {
+                processingStarts.set(item.id, { start: item.started_at, estimated: item.estimated_minutes });
+                updateCountdown(item.id, item.estimated_minutes, item.started_at);
+              }
+              statusHtml += `<br/><small id="countdown-${item.id}">Obliczanie...</small>`;
+            } else if (item.status === "completed" && item.processing_time) {
+              stopCountdown(item.id);
+              statusHtml += `<br/><small>Czas przetwarzania: ${item.processing_time}</small>`;
+            } else if (item.status === "failed") {
+              stopCountdown(item.id);
+              if (item.error) {
+                statusHtml += `<br/><small>${item.error}</small>`;
+              }
+            } else {
+              stopCountdown(item.id);
+            }
+
             return `<tr data-id="${item.id}">
               <td>${item.filename}<br/><small>Dodano: ${item.created_at}</small></td>
               <td>${item.size_mb} MB</td>
-              <td>${item.estimated_minutes} min</td>
-              <td><span class="status ${item.status}">${statusLabels[item.status] || item.status}</span>${error}</td>
+              <td>${statusHtml}</td>
               <td class="downloads">${downloads}</td>
             </tr>`;
           })

@@ -180,7 +180,6 @@ def create_web_app(
             "dashboard.html",
             queue_items=queue_items,
             accept_attribute=accept_attribute,
-            estimated_hint="Szacowany czas: ok. 1 minuta na 1 MB pliku.",
         )
 
     @app.route("/upload", methods=["POST"])
@@ -205,10 +204,8 @@ def create_web_app(
             _start_processing(queue_item)
 
         if saved_items:
-            total_estimate = sum(item.estimated_minutes for item in saved_items)
             flash(
-                f"Przesłano {len(saved_items)} plików. "
-                f"Szacowany łączny czas: ~{total_estimate} min.",
+                f"Przesłano {len(saved_items)} plików.",
                 "success",
             )
         if rejected:

@@ -1,0 +1,39 @@
+# Deployment komendy dla Ubuntu 24.04 na Azure
+# Wykonaj komendy po kolei lub skopiuj całość i wklej do terminala
+
+# 1. Przejście do folderu projektów i klonowanie repozytorium
+mkdir -p ~/projekty
+cd ~/projekty
+git clone https://github.com/AuCourDe/Kukacz.git Whisper
+cd Whisper
+
+# 2. Instalacja zależności systemowych
+sudo apt update
+sudo apt install -y python3 python3-pip python3-venv ffmpeg git
+
+# 3. Instalacja Ollama (jeśli potrzebne)
+curl -fsSL https://ollama.com/install.sh | sh
+
+# 4. Utworzenie i aktywacja wirtualnego środowiska + instalacja requirements
+python3 -m venv venv_python310_new
+source venv_python310_new/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+
+# 5. Konfiguracja środowiska
+cp env.example .env
+# Edytuj .env według instrukcji w DEPLOYMENT_AZURE.md
+nano .env
+
+# 6. Uruchomienie aplikacji
+# Opcja A: Użyj skryptu run.sh (automatycznie używa .venv, możesz zmienić ustawiając VENV_DIR)
+VENV_DIR=venv_python310_new ./run.sh
+
+# Opcja B: Ręczne uruchomienie
+source venv_python310_new/bin/activate
+python3 -m app.web_server
+
+# Opcja C: Uruchomienie w tle (z logiem)
+source venv_python310_new/bin/activate
+nohup python3 -m app.web_server > web_server.log 2>&1 &
+

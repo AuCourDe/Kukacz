@@ -43,6 +43,6 @@ if [[ "${SKIP_APP_EXECUTION}" == "1" ]]; then
   exit 0
 fi
 
-echo "Starting Whisper Analyzer..."
-python -m app.main
+echo "Starting Whisper Analyzer Web Server (Flask + Backend)..."
+python -m app.web_server
 

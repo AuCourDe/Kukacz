@@ -4,6 +4,7 @@ Kolejka przetwarzania plików audio dla interfejsu webowego.
 """
 from __future__ import annotations
 
+import logging
 import math
 import threading
 import uuid
@@ -12,11 +13,32 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
 
+logger = logging.getLogger(__name__)
 
-def _estimate_minutes(size_bytes: int) -> int:
-    """Szacuje czas przetwarzania – 1 minuta na każdy pełny megabajt."""
-    megabytes = max(size_bytes / (1024 * 1024), 0)
-    return max(1, math.ceil(megabytes))
+
+def _get_audio_duration_seconds(file_path: Path) -> float:
+    """Pobiera długość nagrania audio w sekundach."""
+    try:
+        import librosa
+        duration = librosa.get_duration(path=str(file_path))
+        return duration
+    except Exception as e:
+        logger.warning(f"Nie udało się odczytać długości audio {file_path}: {e}")
+        # Fallback: szacowanie na podstawie rozmiaru (przybliżenie 1MB/min dla MP3)
+        size_mb = file_path.stat().st_size / (1024 * 1024)
+        return max(60.0, size_mb * 60)  # minimum 1 minuta
+
+
+def _estimate_minutes(file_path: Path) -> int:
+    """Szacuje czas przetwarzania – 1 minuta nagrania = 1 minuta przetwarzania."""
+    try:
+        duration_seconds = _get_audio_duration_seconds(file_path)
+        minutes = math.ceil(duration_seconds / 60.0)
+        return max(1, minutes)
+    except Exception as e:
+        logger.warning(f"Błąd podczas szacowania czasu dla {file_path}: {e}")
+        # Fallback: 1 minuta minimum
+        return 1
 
 
 def _utcnow() -> datetime:
@@ -39,6 +61,30 @@ class QueueItem:
     estimated_minutes: int = 1
     result_files: Dict[str, str] = field(default_factory=dict)
 
+    def _format_datetime(self, dt: Optional[datetime]) -> Optional[str]:
+        """Formatuje datę do formatu RRRR-MM-DD GG:MM:SS (czas lokalny)."""
+        if dt is None:
+            return None
+        # Konwersja UTC na lokalny czas (jeśli jest timezone)
+        if dt.tzinfo is not None:
+            # Konwersja UTC na lokalny czas
+            local_dt = dt.astimezone().replace(tzinfo=None)
+        else:
+            local_dt = dt
+        return local_dt.strftime("%Y-%m-%d %H:%M:%S")
+    
+    def _calculate_processing_time(self) -> Optional[str]:
+        """Oblicza faktyczny czas przetwarzania w minutach i sekundach."""
+        if not self.started_at or not self.finished_at:
+            return None
+        delta = self.finished_at - self.started_at
+        total_seconds = int(delta.total_seconds())
+        minutes = total_seconds // 60
+        seconds = total_seconds % 60
+        if minutes > 0:
+            return f"{minutes}m {seconds}s"
+        return f"{seconds}s"
+    
     def to_dict(self) -> Dict:
         size_mb = self.size_bytes / (1024 * 1024) if self.size_bytes else 0.0
         return {
@@ -46,10 +92,11 @@ class QueueItem:
             "filename": self.filename,
             "size_mb": round(size_mb, 2),
             "status": self.status,
-            "created_at": self.created_at.isoformat(),
-            "started_at": self.started_at.isoformat() if self.started_at else None,
-            "finished_at": self.finished_at.isoformat() if self.finished_at else None,
+            "created_at": self._format_datetime(self.created_at),
+            "started_at": self._format_datetime(self.started_at),
+            "finished_at": self._format_datetime(self.finished_at),
             "estimated_minutes": self.estimated_minutes,
+            "processing_time": self._calculate_processing_time(),
             "error": self.error,
             "result_files": self.result_files,
         }
@@ -71,7 +118,7 @@ class ProcessingQueue:
             filename=file_path.name,
             size_bytes=size,
             input_path=file_path,
-            estimated_minutes=_estimate_minutes(size),
+            estimated_minutes=_estimate_minutes(file_path),
         )
         with self._lock:
             self._items[item.id] = item
