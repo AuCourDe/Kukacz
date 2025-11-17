@@ -307,3 +307,10 @@ RETRY_DELAY_BASE: int = int(os.getenv("RETRY_DELAY_BASE", "2"))  # sekundy
 # Ustawienia bezpieczeństwa
 ENABLE_FILE_ENCRYPTION: bool = os.getenv("ENABLE_FILE_ENCRYPTION", "true").lower() == "true"
 TEMPORARY_FILE_CLEANUP: bool = os.getenv("TEMPORARY_FILE_CLEANUP", "true").lower() == "true"
+
+# Ustawienia interfejsu webowego
+WEB_SECRET_KEY: str = os.getenv("WEB_SECRET_KEY", "change_me")
+WEB_LOGIN: str = os.getenv("WEB_LOGIN", "admin")
+WEB_PASSWORD: str = os.getenv("WEB_PASSWORD", "Demo202511!Gacek")
+WEB_HOST: str = os.getenv("WEB_HOST", "127.0.0.1")
+WEB_PORT: int = int(os.getenv("WEB_PORT", "8080"))

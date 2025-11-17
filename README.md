@@ -113,6 +113,25 @@ brew install ffmpeg
 - Modele Whisper pobierają się automatycznie do podfolderu `models/` w katalogu projektu
 - Token Hugging Face (`SPEAKER_DIARIZATION_TOKEN`) wpisz w pliku `.env` po zaakceptowaniu licencji na https://huggingface.co/pyannote/speaker-diarization-3.1
 
+### Interfejs webowy (upload przez przeglądarkę)
+
+1. **Skonfiguruj dane logowania**
+   - W pliku `.env` ustaw `WEB_LOGIN`, `WEB_PASSWORD` i losowe `WEB_SECRET_KEY`
+2. **Uruchom serwer Flask**
+   ```bash
+   source .venv/bin/activate
+   python -m app.web_server
+   ```
+3. **Zaloguj się**
+   - Wejdź na `http://<WEB_HOST>:<WEB_PORT>/`
+   - Domyślnie login `admin`, hasło `Demo202511!Gacek` (zmień w `.env`)
+4. **Dodaj pliki**
+   - Kliknij „Zapisz i przetwórz” po wybraniu plików (MP3/FLAC/WAV itd.)
+   - Pliki trafiają do folderu `input/`, są widoczne w jawnej kolejce i automatycznie przetwarzane
+5. **Śledź postęp i pobierz wyniki**
+   - Kolejka odświeża się co kilka sekund dla wszystkich zalogowanych użytkowników
+   - Po zakończeniu pojawią się linki do pobrania transkrypcji oraz analizy Ollama
+
 ### Struktura folderów
 
 ```

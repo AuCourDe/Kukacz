@@ -29,6 +29,7 @@ from .speech_transcriber import WhisperTranscriber
 from .speaker_diarizer import SpeakerDiarizer, SimpleSpeakerDiarizer
 from .content_analyzer import ContentAnalyzer
 from .result_saver import ResultSaver
+from .processing_queue import ProcessingQueue
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +39,8 @@ class AudioProcessor:
     def __init__(self, input_folder: Union[str, Path] = INPUT_FOLDER, 
                  output_folder: Union[str, Path] = OUTPUT_FOLDER, 
                  enable_speaker_diarization: bool = ENABLE_SPEAKER_DIARIZATION, 
-                 enable_ollama_analysis: bool = ENABLE_OLLAMA_ANALYSIS):
+                 enable_ollama_analysis: bool = ENABLE_OLLAMA_ANALYSIS,
+                 processing_queue: Optional[ProcessingQueue] = None):
         # Inicjalizacja komponentów
         input_folder_path = Path(input_folder)
         output_folder_path = Path(output_folder)
@@ -51,6 +53,7 @@ class AudioProcessor:
         self._processed_folder.mkdir(parents=True, exist_ok=True)
         self.result_saver = ResultSaver(output_folder_path)
         self.file_watcher = FileWatcherManager(self, input_folder_path)
+        self.processing_queue = processing_queue
         
         # Konfiguracja funkcjonalności
         self.enable_speaker_diarization = enable_speaker_diarization
@@ -135,9 +138,18 @@ class AudioProcessor:
             logger.error(f"Błąd podczas transkrypcji z mówcami: {e}")
             return None
     
-    def process_audio_file(self, audio_file_path: Path) -> None:
+    def process_audio_file(self, audio_file_path: Path, queue_item_id: Optional[str] = None) -> dict:
         """Przetwarzanie pojedynczego pliku audio z pełnym pipeline"""
         with self.semaphore:  # Ograniczenie liczby równoczesnych przetwarzań
+            result_summary: dict = {
+                "success": False,
+                "transcription_file": None,
+                "analysis_file": None,
+                "processed_audio": None,
+                "timestamp": None,
+            }
+            if self.processing_queue and queue_item_id:
+                self.processing_queue.mark_processing(queue_item_id)
             try:
                 logger.info(f"Rozpoczęcie przetwarzania: {audio_file_path.name}")
                 
@@ -160,6 +172,8 @@ class AudioProcessor:
                         analysis_results,
                         timestamp=timestamp,
                     )
+                    transcription_filename = f"{audio_file_path.stem} {timestamp}.txt"
+                    analysis_filename = f"{audio_file_path.stem} ANALIZA {timestamp}.txt"
                     # Przeniesienie przetworzonego pliku do folderu processed
                     destination_name = f"{audio_file_path.stem} {timestamp}{audio_file_path.suffix}"
                     destination = self.processed_folder / destination_name
@@ -170,11 +184,38 @@ class AudioProcessor:
                         audio_file_path.name,
                         destination,
                     )
+                    result_summary.update(
+                        {
+                            "success": True,
+                            "timestamp": timestamp,
+                            "transcription_file": transcription_filename,
+                            "analysis_file": analysis_filename,
+                            "processed_audio": str(destination),
+                        }
+                    )
+                    if self.processing_queue and queue_item_id:
+                        self.processing_queue.mark_completed(
+                            queue_item_id,
+                            {
+                                "transcription": transcription_filename,
+                                "analysis": analysis_filename,
+                                "processed_audio": destination_name,
+                            },
+                        )
                 else:
                     logger.error(f"Nie udało się przetworzyć pliku: {audio_file_path.name}")
+                    if self.processing_queue and queue_item_id:
+                        self.processing_queue.mark_failed(
+                            queue_item_id,
+                            "Nie udało się przetworzyć pliku – brak danych transkrypcji.",
+                        )
                 
             except Exception as e:
                 logger.error(f"Błąd podczas przetwarzania {audio_file_path.name}: {e}")
+                if self.processing_queue and queue_item_id:
+                    self.processing_queue.mark_failed(queue_item_id, str(e))
+            finally:
+                return result_summary
 
     @property
     def processed_folder(self) -> Path:
