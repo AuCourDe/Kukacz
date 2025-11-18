@@ -12,6 +12,7 @@ Zawiera wszystkie ustawienia aplikacji podzielone na kategorie:
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 from typing import Callable
@@ -207,7 +208,49 @@ OLLAMA_TOP_P: float = _env_float("OLLAMA_TOP_P", 0.9)
 OLLAMA_TOP_K: int = _env_int("OLLAMA_TOP_K", 40)
 OLLAMA_REPEAT_PENALTY: float = _env_float("OLLAMA_REPEAT_PENALTY", 1.1)
 OLLAMA_NUM_PREDICT: int = _env_int("OLLAMA_NUM_PREDICT", -1)  # -1 = default (no limit)
-OLLAMA_STOP_SEQUENCE: str = os.getenv("OLLAMA_STOP_SEQUENCE", "").strip()
+
+
+def _parse_stop_sequences(raw_value: str) -> list[str]:
+    """Normalize OLLAMA_STOP_SEQUENCE env value to a list of strings."""
+    if not raw_value:
+        return []
+    value = raw_value.strip(" \t")
+    if not value:
+        return []
+
+    try:
+        parsed = json.loads(value)
+    except json.JSONDecodeError:
+        parsed = None
+
+    if isinstance(parsed, list):
+        sequences: list[str] = []
+        for item in parsed:
+            normalized = str(item)
+            trimmed = normalized.strip(" \t")
+            if trimmed:
+                sequences.append(trimmed)
+        return sequences
+    if isinstance(parsed, str):
+        trimmed = parsed.strip(" \t")
+        return [trimmed] if trimmed else []
+
+    separators = ("||", "\n", ";", ",")
+    for separator in separators:
+        if separator in value:
+            parts = []
+            for part in value.split(separator):
+                trimmed = part.strip(" \t")
+                if trimmed:
+                    parts.append(trimmed)
+            if parts:
+                return parts
+
+    return [value]
+
+
+_OLLAMA_STOP_SEQUENCE_RAW: str = os.getenv("OLLAMA_STOP_SEQUENCE", "")
+OLLAMA_STOP_SEQUENCE: list[str] = _parse_stop_sequences(_OLLAMA_STOP_SEQUENCE_RAW)
 
 OLLAMA_GENERATION_PARAMS = {
     "temperature": OLLAMA_TEMPERATURE,

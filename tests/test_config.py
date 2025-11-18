@@ -17,6 +17,7 @@ def _reload_config(monkeypatch, env: Dict[str, str] | None = None):
         "WHISPER_MODEL",
         "OLLAMA_MODEL",
         "OLLAMA_BASE_URL",
+        "OLLAMA_STOP_SEQUENCE",
         "ENABLE_SPEAKER_DIARIZATION",
         "ENABLE_OLLAMA_ANALYSIS",
         "INPUT_FOLDER",
@@ -94,6 +95,28 @@ def test_config_absolute_log_file(monkeypatch, tmp_path):
     config = _reload_config(monkeypatch, {"LOG_FILE": str(custom_log)})
 
     assert config.LOG_FILE == custom_log
+
+
+def test_stop_sequence_single_value(monkeypatch):
+    config = _reload_config(monkeypatch, {"OLLAMA_STOP_SEQUENCE": "###"})
+
+    assert config.OLLAMA_STOP_SEQUENCE == ["###"]
+    assert config.OLLAMA_GENERATION_PARAMS["stop"] == ["###"]
+
+
+def test_stop_sequence_multiple_values(monkeypatch):
+    env = {"OLLAMA_STOP_SEQUENCE": "###||END||\n\n"}
+    config = _reload_config(monkeypatch, env)
+
+    assert config.OLLAMA_STOP_SEQUENCE == ["###", "END", "\n\n"]
+    assert config.OLLAMA_GENERATION_PARAMS["stop"] == ["###", "END", "\n\n"]
+
+
+def test_stop_sequence_json_array(monkeypatch):
+    env = {"OLLAMA_STOP_SEQUENCE": '["###", "\\n\\n", "STOP"]'}
+    config = _reload_config(monkeypatch, env)
+
+    assert config.OLLAMA_STOP_SEQUENCE == ["###", "\n\n", "STOP"]
 
 
 def test_run_script_skip_modes(tmp_path):
