@@ -85,7 +85,7 @@ def create_web_app(
 
         return wrapped
 
-    def _start_processing(queue_item: QueueItem) -> None:
+    def _start_processing(queue_item: QueueItem, enable_preprocessing: bool = True) -> None:
         """Uruchamia przetwarzanie pliku (w tle lub synchronicznie)."""
 
         def _worker():
@@ -94,6 +94,7 @@ def create_web_app(
                 result = processor.process_audio_file(
                     queue_item.input_path,
                     queue_item_id=queue_item.id,
+                    enable_preprocessing=enable_preprocessing,
                 )
                 if result.get("success"):
                     manual_files: Dict[str, str] = {}
@@ -190,6 +191,9 @@ def create_web_app(
             flash("Nie wybrano żadnych plików.", "error")
             return redirect(url_for("dashboard"))
 
+        # Pobranie ustawienia audio preprocessora (domyślnie włączony)
+        enable_preprocessing = request.form.get("enable_preprocessing") == "1"
+
         saved_items: List[QueueItem] = []
         rejected: List[str] = []
 
@@ -201,7 +205,7 @@ def create_web_app(
 
             queue_item = processing_queue.enqueue(saved_path)
             saved_items.append(queue_item)
-            _start_processing(queue_item)
+            _start_processing(queue_item, enable_preprocessing=enable_preprocessing)
 
         if saved_items:
             flash(

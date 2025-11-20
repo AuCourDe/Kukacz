@@ -116,17 +116,17 @@ class ContentAnalyzer:
                     content_analysis.get("injection_matches"),
                 )
             
-            # Analiza wzorców mówców
-            if speakers_data:
-                logger.info("Analiza wzorców mówców...")
-                speaker_analysis = self.ollama_analyzer.analyze_speaker_patterns(speakers_data)
-                speaker_analysis = self.reasoning_filter.process_ollama_response(speaker_analysis)
-                analysis_results["speaker_analysis"] = speaker_analysis
+            # Analiza wzorców mówców - WYŁĄCZONA (tylko call_center)
+            # if speakers_data:
+            #     logger.info("Analiza wzorców mówców...")
+            #     speaker_analysis = self.ollama_analyzer.analyze_speaker_patterns(speakers_data)
+            #     speaker_analysis = self.reasoning_filter.process_ollama_response(speaker_analysis)
+            #     analysis_results["speaker_analysis"] = speaker_analysis
             
-            # Analiza sentymentu
-            sentiment_analysis = self.ollama_analyzer.analyze_content(text, "sentiment")
-            sentiment_analysis = self.reasoning_filter.process_ollama_response(sentiment_analysis)
-            analysis_results["sentiment_analysis"] = sentiment_analysis
+            # Analiza sentymentu - WYŁĄCZONA (tylko call_center)
+            # sentiment_analysis = self.ollama_analyzer.analyze_content(text, "sentiment")
+            # sentiment_analysis = self.reasoning_filter.process_ollama_response(sentiment_analysis)
+            # analysis_results["sentiment_analysis"] = sentiment_analysis
             
             logger.info("Analiza treści zakończona pomyślnie")
             return analysis_results

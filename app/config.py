@@ -261,6 +261,14 @@ MODEL_CACHE_DIR: Path = BASE_DIR / os.getenv("MODEL_CACHE_DIR", "models")
 ENABLE_SPEAKER_DIARIZATION: bool = os.getenv("ENABLE_SPEAKER_DIARIZATION", "true").lower() == "true"
 ENABLE_OLLAMA_ANALYSIS: bool = os.getenv("ENABLE_OLLAMA_ANALYSIS", "true").lower() == "true"
 
+# Ustawienia audio preprocessora
+AUDIO_PREPROCESS_ENABLED: bool = os.getenv("AUDIO_PREPROCESS_ENABLED", "true").lower() == "true"
+AUDIO_PREPROCESS_NOISE_REDUCE: bool = os.getenv("AUDIO_PREPROCESS_NOISE_REDUCE", "true").lower() == "true"
+AUDIO_PREPROCESS_NORMALIZE: bool = os.getenv("AUDIO_PREPROCESS_NORMALIZE", "true").lower() == "true"
+AUDIO_PREPROCESS_GAIN_DB: float = _env_float("AUDIO_PREPROCESS_GAIN_DB", 1.5)
+AUDIO_PREPROCESS_COMPRESSOR: bool = os.getenv("AUDIO_PREPROCESS_COMPRESSOR", "true").lower() == "true"
+AUDIO_PREPROCESS_EQ: bool = os.getenv("AUDIO_PREPROCESS_EQ", "true").lower() == "true"
+
 # Ustawienia przetwarzania równoległego
 # Domyślnie przetwarzamy jeden plik naraz (stabilne na CPU). Aby zwiększyć przepustowość
 # ustaw zmienną środowiskową MAX_CONCURRENT_PROCESSES, pamiętając o ograniczeniach GPU/CPU.

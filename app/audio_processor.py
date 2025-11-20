@@ -30,6 +30,7 @@ from .speaker_diarizer import SpeakerDiarizer, SimpleSpeakerDiarizer
 from .content_analyzer import ContentAnalyzer
 from .result_saver import ResultSaver
 from .processing_queue import ProcessingQueue
+from .audio_preprocessor import AudioPreprocessor
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +50,7 @@ class AudioProcessor:
         self.transcriber = WhisperTranscriber()
         self.speaker_diarizer = SpeakerDiarizer()
         self.content_analyzer = ContentAnalyzer()
+        self.audio_preprocessor = AudioPreprocessor()
         self._processed_folder = Path(PROCESSED_FOLDER)
         self._processed_folder.mkdir(parents=True, exist_ok=True)
         self.result_saver = ResultSaver(output_folder_path)
@@ -138,7 +140,7 @@ class AudioProcessor:
             logger.error(f"Błąd podczas transkrypcji z mówcami: {e}")
             return None
     
-    def process_audio_file(self, audio_file_path: Path, queue_item_id: Optional[str] = None) -> dict:
+    def process_audio_file(self, audio_file_path: Path, queue_item_id: Optional[str] = None, enable_preprocessing: bool = True) -> dict:
         """Przetwarzanie pojedynczego pliku audio z pełnym pipeline"""
         with self.semaphore:  # Ograniczenie liczby równoczesnych przetwarzań
             result_summary: dict = {
@@ -153,7 +155,27 @@ class AudioProcessor:
             try:
                 logger.info(f"Rozpoczęcie przetwarzania: {audio_file_path.name}")
                 
-                # Transkrypcja z rozpoznawaniem mówców
+                # Preprocessing audio (jeśli włączony)
+                original_file_path = audio_file_path
+                processed_file_path = None
+                timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+                
+                if enable_preprocessing and self.audio_preprocessor.enabled:
+                    logger.info("Wstępne przetwarzanie audio...")
+                    temp_processed = self.audio_preprocessor.process(audio_file_path)
+                    if temp_processed and temp_processed != audio_file_path:
+                        processed_file_path = temp_processed
+                        audio_file_path = temp_processed  # Używamy przetworzonego pliku do transkrypcji
+                        logger.info(f"Audio przetworzone: {processed_file_path.name}")
+                
+                # Kopiowanie oryginalnego pliku do processed
+                original_destination_name = f"{original_file_path.stem} {timestamp}{original_file_path.suffix}"
+                original_destination = self.processed_folder / original_destination_name
+                original_destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(str(original_file_path), str(original_destination))
+                logger.debug(f"Skopiowano oryginalny plik do: {original_destination_name}")
+                
+                # Transkrypcja z rozpoznawaniem mówców (na przetworzonym lub oryginalnym pliku)
                 transcription_data = self.transcribe_audio_with_speakers(audio_file_path)
                 if transcription_data:
                     # Analiza treści za pomocą Ollama (jeśli włączona)
@@ -164,25 +186,33 @@ class AudioProcessor:
                     else:
                         logger.info(f"Analiza Ollama wyłączona, pominięto analizę treści.")
                     
-                    # Zapisanie wyników
-                    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+                    # Zapisanie wyników (używamy oryginalnej nazwy pliku)
                     self.result_saver.save_transcription_with_speakers(
-                        audio_file_path,
+                        original_file_path,
                         transcription_data,
                         analysis_results,
                         timestamp=timestamp,
                     )
-                    transcription_filename = f"{audio_file_path.stem} {timestamp}.txt"
-                    analysis_filename = f"{audio_file_path.stem} ANALIZA {timestamp}.txt"
-                    # Przeniesienie przetworzonego pliku do folderu processed
-                    destination_name = f"{audio_file_path.stem} {timestamp}{audio_file_path.suffix}"
-                    destination = self.processed_folder / destination_name
-                    destination.parent.mkdir(parents=True, exist_ok=True)
-                    shutil.move(str(audio_file_path), destination)
+                    transcription_filename = f"{original_file_path.stem} {timestamp}.txt"
+                    analysis_filename = f"{original_file_path.stem} ANALIZA {timestamp}.txt"
+                    
+                    # Przeniesienie przetworzonego pliku do folderu processed (jeśli istnieje)
+                    processed_destination_name = None
+                    if processed_file_path and processed_file_path.exists():
+                        processed_destination_name = f"{original_file_path.stem} processed {timestamp}{processed_file_path.suffix}"
+                        processed_destination = self.processed_folder / processed_destination_name
+                        processed_destination.parent.mkdir(parents=True, exist_ok=True)
+                        shutil.move(str(processed_file_path), str(processed_destination))
+                        logger.debug(f"Przeniesiono przetworzony plik do: {processed_destination_name}")
+                    
+                    # Usunięcie oryginalnego pliku z input folderu (już skopiowany do processed)
+                    if original_file_path.exists() and original_file_path.parent == self.file_loader.input_folder:
+                        original_file_path.unlink()
+                        logger.debug(f"Usunięto oryginalny plik z folderu input: {original_file_path.name}")
                     logger.success(
-                        "Przetwarzanie zakończone pomyślnie: %s (przeniesiono do %s)",
-                        audio_file_path.name,
-                        destination,
+                        "Przetwarzanie zakończone pomyślnie: %s (plik do: %s)",
+                        original_file_path.name,
+                        self.processed_folder,
                     )
                     result_summary.update(
                         {
@@ -190,17 +220,21 @@ class AudioProcessor:
                             "timestamp": timestamp,
                             "transcription_file": transcription_filename,
                             "analysis_file": analysis_filename,
-                            "processed_audio": str(destination),
+                            "processed_audio": original_destination_name,
+                            "processed_audio_enhanced": processed_destination_name,
                         }
                     )
                     if self.processing_queue and queue_item_id:
+                        result_files = {
+                            "transcription": transcription_filename,
+                            "analysis": analysis_filename,
+                            "processed_audio": original_destination_name,
+                        }
+                        if processed_destination_name:
+                            result_files["processed_audio_enhanced"] = processed_destination_name
                         self.processing_queue.mark_completed(
                             queue_item_id,
-                            {
-                                "transcription": transcription_filename,
-                                "analysis": analysis_filename,
-                                "processed_audio": destination_name,
-                            },
+                            result_files,
                         )
                 else:
                     logger.error(f"Nie udało się przetworzyć pliku: {audio_file_path.name}")

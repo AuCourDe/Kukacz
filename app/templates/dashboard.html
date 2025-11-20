@@ -185,6 +185,10 @@
         {% endwith %}
         <form action="{{ url_for('upload') }}" method="post" enctype="multipart/form-data">
           <input type="file" name="files" accept="{{ accept_attribute }}" multiple required />
+          <label style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem;">
+            <input type="checkbox" name="enable_preprocessing" value="1" checked style="width: auto;" />
+            <span>Audio Preprocessor (odszumianie, normalizacja, poprawa jakości)</span>
+          </label>
           <button type="submit">Zapisz i przetwórz</button>
         </form>
       </section>
